@@ -1,0 +1,123 @@
+--- a/plugin-src/host/harness-connection.mjs
++++ b/plugin-src/host/harness-connection.mjs
+@@ -13,6 +13,8 @@
+   const apiProxy = optionalService(ctx, 'apiProxy') ?? modernHarnessApi(ctx);
+   return {
+     apiProxy,
++    // This capability stays inside the Host; it is never exposed as an RPC.
++    registerIngress: (input) => optionalService(ctx, 'enterpriseAuth')?.registerIngress(input),
+     // Cordis child contexts share one root; different Hosts must not share
+     // ownership of pending questions and approvals.
+     interactionScope: ctx.root ?? ctx,
+--- a/src/channels/shared/harness-client.mjs
++++ b/src/channels/shared/harness-client.mjs
+@@ -729,6 +729,7 @@
+   #controlExecutor;
+   #sessionMaintenanceExecutor;
+   #fileIngressExecutor;
++  #registerIngress;
+   #managedProcess = null;
+   #interactionRegistry;
+   #interactionOwnerships;
+@@ -752,6 +753,7 @@
+     controlExecutor,
+     sessionMaintenanceExecutor,
+     fileIngressExecutor,
++    registerIngress,
+   }) {
+     if (typeof createWebSocket !== 'function') {
+       throw new TypeError('createWebSocket must be a function');
+@@ -801,6 +803,7 @@
+     this.#controlExecutor = controlExecutor;
+     this.#sessionMaintenanceExecutor = sessionMaintenanceExecutor;
+     this.#fileIngressExecutor = fileIngressExecutor;
++    this.#registerIngress = this.#baseUrl ? undefined : registerIngress;
+     this.#interactionRegistry = interactionRegistry(this.#baseUrl?.origin ?? interactionScope);
+     this.#interactionOwnerships = this.#interactionRegistry.ownerships;
+     this.#interactionClaims = this.#interactionRegistry.claims;
+@@ -1450,6 +1453,7 @@
+     const stagedBatches = [];
+     let promptAccepted = false;
+     let turnFinished = false;
++    let releaseIngress;
+ 
+     const deliverArtifacts = async () => {
+       if (!onArtifact || artifactsDelivered || tracker.turn === null) {
+@@ -1515,6 +1519,9 @@
+       // `content`: the prompt also carries whatever the user typed, and a
+       // message that merely looks like a guidance block is not configuration.
+       imSourceGuidance.publish(sessionId, options.sourceGuidance);
++      if (options.principal) {
++        releaseIngress = this.#registerIngress?.({ sessionId, rpcId: promptRpcId, principal: options.principal });
++      }
+       const clientTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+       const sendPrompt = (promptContent) => this.rpc('session.prompt', {
+         sessionId,
+@@ -1645,6 +1652,7 @@
+         throw turnStoppedError();
+       }
+     } finally {
++      releaseIngress?.();
+       releasePromptInputOrigin();
+       if (!promptAccepted || turnFinished) {
+         for (const staged of stagedBatches) {
+--- a/src/channels/weixin/weixin-runtime.mjs
++++ b/src/channels/weixin/weixin-runtime.mjs
+@@ -197,6 +197,7 @@
+         baseUrl: this.#config.baseUrl,
+         token: this.#token,
+         ownerUserId: this.#config.ownerUserId,
++        botId: this.#config.botId,
+         harness: this.#harness,
+         state: this.#state,
+         contextEnhancement: this.#contextEnhancement,
+--- a/src/channels/weixin/weixin-bridge.mjs
++++ b/src/channels/weixin/weixin-bridge.mjs
+@@ -299,6 +299,7 @@
+   #baseUrl;
+   #token;
+   #ownerUserId;
++  #botId;
+   #harness;
+   #state;
+   #deferred;
+@@ -333,6 +334,7 @@
+     baseUrl,
+     token,
+     ownerUserId,
++    botId,
+     harness,
+     state,
+     contextEnhancement,
+@@ -354,6 +356,7 @@
+     this.#baseUrl = baseUrl;
+     this.#token = token;
+     this.#ownerUserId = ownerUserId;
++    this.#botId = botId;
+     this.#harness = harness;
+     this.#state = state;
+     this.#contextEnhancement = contextEnhancement;
+@@ -842,6 +845,8 @@
+           createOptions: { signal: this.#signal },
+           existsOptions: { signal: this.#signal },
+           askOptions: {
++            // sender was admitted from the authenticated WeChat update above.
++            ...(this.#botId ? { principal: { platform: 'weixin', botId: this.#botId, senderId: sender } } : {}),
+             timeoutMs: this.#replyTimeoutMs,
+             signal: this.#signal,
+             control: { owner: this, key },
+--- a/src/channels/feishu/bridge.mjs
++++ b/src/channels/feishu/bridge.mjs
+@@ -4063,7 +4063,12 @@
+   }
+ 
+   #interactionAskOptions(event, key, files) {
++    const openId = strictSenderOpenId(event);
+     return {
++      // Identity comes only from an admitted native private-message event.
++      ...(event.message.chat_type === 'p2p' && this.#botId && openId
++        ? { principal: { platform: 'feishu', botId: this.#botId, senderId: openId } }
++        : {}),
+       timeoutMs: this.#replyTimeoutMs,
+       signal: this.#signal,
+       control: { owner: this, key },

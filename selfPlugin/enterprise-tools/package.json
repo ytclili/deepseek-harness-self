@@ -1,0 +1,25 @@
+{
+  "name": "dsh-enterprise-tools",
+  "version": "0.1.0",
+  "description": "企业工具：查询当前授权账号可见的商品列表",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "cordis.patch.yml", "README.md", "harness-version.txt"],
+  "engines": {"node": "^22.19.0 || >=24.0.0"},
+  "dsh": {"bundle": {"patch": "./cordis.patch.yml"}},
+  "scripts": {
+    "setup": "node scripts/link-harness.mjs",
+    "build": "node node_modules/typescript/bin/tsc -p tsconfig.json",
+    "check": "node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "install:local": "node scripts/install-local.mjs",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-tools": "0.1.6-alpha.1",
+    "@deepseek-ai/schemastery": "3.18.2"
+  }
+}

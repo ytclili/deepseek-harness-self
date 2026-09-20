@@ -1,0 +1,38 @@
+{
+  "version": "4.21.2",
+  "revision": 2,
+  "originalBundleHash": "5cacc3f7c8abfbe82c4be717160a9722bc4488ca0e0ebe068825f3c58bbce382",
+  "previousBundleHash": "44b6820b1a259b808b8db853413f3a8c933c049e8347f22b191d921bbb8198a5",
+  "files": [
+    {
+      "path": "plugin-src/host/harness-connection.mjs",
+      "before": "5807ba19bbbb9908aa6bbf15c6a3eb151532a75a1c1c6412d076638882ae5351",
+      "previous": "8c7452683464142eb577331b14f31a72470719d0b99962bb72ef395c041354fb",
+      "after": "8c7452683464142eb577331b14f31a72470719d0b99962bb72ef395c041354fb"
+    },
+    {
+      "path": "src/channels/shared/harness-client.mjs",
+      "before": "6a222bb7218ad20d140b7570c7f385fe6775365fbd4bbeabeb45ec5388ea299a",
+      "previous": "d49a98abe83340832bc915d98331fa012b3b65eb1e8d2e782efc40037bd7aa94",
+      "after": "d49a98abe83340832bc915d98331fa012b3b65eb1e8d2e782efc40037bd7aa94"
+    },
+    {
+      "path": "src/channels/weixin/weixin-runtime.mjs",
+      "before": "6bcd247fb0a569dff5d5ec2fd0335c28a6ad5560b1361d031ddafb9f8d17581d",
+      "previous": "f1751a2c638447d4e361d91020dcaf5576abc985669d7ca9e98386a6368b10cf",
+      "after": "f1751a2c638447d4e361d91020dcaf5576abc985669d7ca9e98386a6368b10cf"
+    },
+    {
+      "path": "src/channels/weixin/weixin-bridge.mjs",
+      "before": "162c14783c6b96e7922e4baee9046dcee01018da841b4a19bb1ed86769e265b9",
+      "previous": "264b149472dba7cf44671c3f2595ff291b8a19fa1ec9c25d5d1bbd9b2ccf5c71",
+      "after": "264b149472dba7cf44671c3f2595ff291b8a19fa1ec9c25d5d1bbd9b2ccf5c71"
+    },
+    {
+      "path": "src/channels/feishu/bridge.mjs",
+      "before": "415e5d5e95fb93fbac98ba1b5fb3d1fb7bd436a2cf6b71ad42930b4f450049ac",
+      "previous": "415e5d5e95fb93fbac98ba1b5fb3d1fb7bd436a2cf6b71ad42930b4f450049ac",
+      "after": "3bd0bc3116d9698d5e4b94a135d56ec61795df5585a7ddcd5c59ef31c98cb567"
+    }
+  ]
+}

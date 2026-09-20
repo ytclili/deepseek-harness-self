@@ -1,0 +1,17 @@
+{
+  "baseUrl": "https://api.nextbos.cn",
+  "loginPath": "/api/v1/auth/login",
+  "loginResponseMode": "http-status",
+  "accountField": "email",
+  "passwordField": "password",
+  "tokenPath": "token",
+  "userIdPath": "user.id",
+  "tenantIdPath": "tenant.id",
+  "expiresAtPath": "expires_at",
+  "codePath": "code",
+  "successCode": 200,
+  "unauthorizedCode": 401,
+  "forbiddenCode": 403,
+  "allowedApiPrefixes": ["/api/v1/"],
+  "maxResponseBytes": 1048576
+}

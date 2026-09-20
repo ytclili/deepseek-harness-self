@@ -1,0 +1,9 @@
+- insert:
+    - id: enterprise-tools
+      name: dsh-enterprise-tools
+      config:
+        baseUrl: http://127.0.0.1:5002
+        tokenFile: !!js process.env.ENTERPRISE_TOKEN_FILE
+        timeoutMs: 10000
+        maxResponseBytes: 1048576
+        maxItems: 100

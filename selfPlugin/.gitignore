@@ -1,0 +1,14 @@
+# Track plugin source; keep machine-local dependencies, output and data out.
+node_modules/
+dist/
+lib/
+.im-build-deps/
+.*backup*/
+.local/
+.env*
+data/
+*.token
+*.key
+key.bin
+*.log
+.scheduler.lock

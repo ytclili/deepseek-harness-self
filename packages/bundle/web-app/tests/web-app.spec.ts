@@ -157,6 +157,10 @@ describe('web-app runtime glue', () => {
     expect(assembly.sections.find(entry => entry.name === 'harness:source')?.text).toContain('DeepSeek Harness implementation checkout')
     const section = assembly.sections.find(entry => entry.name === 'app:web-surface')
     expect(section?.text).toContain('http://127.0.0.1:4567')
+    expect(section?.text).toContain('This Host provides the DeepSeek Harness Web GUI')
+    expect(section?.text).toContain('does not establish the channel of the current message')
+    expect(section?.text).toContain('Only for messages received through the Web GUI')
+    expect(section?.text).not.toContain('You are interacting with the user through')
     // The single update contract: the receiver is always on; no-refresh
     // reloads additionally need the rebuild watcher.
     expect(section?.text).toContain('pnpm run dev:web')

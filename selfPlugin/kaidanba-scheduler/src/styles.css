@@ -1,0 +1,108 @@
+.scheduler-app { min-height: 100vh; background: #ffffff; color: #262626; }
+.scheduler-app .brand-bar { height: 76px; padding: 0 5%; display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid #e5e5e5; }
+.scheduler-app .brand { display: flex; align-items: center; gap: 13px; color: #737373; font-size: 14px; }
+.scheduler-app .brand strong { font-size: 20px; color: #262626; letter-spacing: 1px; }
+.scheduler-app .brand-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: #262626; color: white; font-size: 21px; }
+.scheduler-app .brand-divider { width: 1px; height: 18px; margin: 0 5px; background: #e5e5e5; }
+.scheduler-main { max-width: 1392px; margin: auto; padding: 32px 48px 28px; }
+.scheduler-app .breadcrumb { color: #737373; font-size: 13px; margin-bottom: 27px; }
+.scheduler-app .breadcrumb span { padding: 0 12px; color: #a3a3a3; }
+.scheduler-app .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
+.scheduler-app .eyebrow, .scheduler-drawer .eyebrow { font-size: 12px; letter-spacing: 1.3px; color: #737373; }
+.scheduler-app h1 { font-size: 32px; font-weight: 650; letter-spacing: -0.7px; margin: 8px 0 11px; }
+.scheduler-app .page-heading p { color: #737373; margin: 0; font-size: 14px; }
+.scheduler-app .page-heading .kdb-btn { height: 43px; padding: 0 20px; font-size: 14px; }
+.scheduler-app .preview-alert { background: #fafafa; border-color: #e5e5e5; margin-bottom: 16px; font-size: 13px; }
+.scheduler-app .tasks-panel { background: #fff; border: 0; border-radius: 0; overflow: hidden; }
+.scheduler-app .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 25px 26px 20px; }
+.scheduler-app .panel-heading > div { display: flex; align-items: center; gap: 15px; }
+.scheduler-app .panel-heading h2 { font-size: 17px; margin: 0; font-weight: 600; }
+.scheduler-app .panel-heading span { color: #737373; font-size: 12px; }
+.scheduler-app .table-toolbar { display: flex; justify-content: space-between; gap: 16px; padding: 0 26px 22px; }
+.scheduler-app .filters { display: flex; gap: 10px; }
+.scheduler-app .filters .kdb-input-affix-wrapper { width: 220px; }
+.scheduler-app .filters .kdb-select { width: 115px; }
+.scheduler-app .kdb-table-thead > tr > th { font-size: 12px; font-weight: 500; }
+.scheduler-app .kdb-table-tbody > tr > td:first-child, .scheduler-app .kdb-table-thead > tr > th:first-child { padding-left: 26px; }
+.scheduler-app .task-name-cell { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.scheduler-app .task-name-cell > div { min-width: 0; }
+.scheduler-app .task-icon { display: grid; place-items: center; flex-shrink: 0; width: 35px; height: 35px; border: 1px solid #e5e5e5; border-radius: 9px; font-size: 17px; color: #737373; }
+.scheduler-app .task-name-link { border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; color: #262626; font-weight: 600; font-size: 14px; }
+.scheduler-app .task-name-link:hover { color: #1677ff; text-decoration: underline; }
+.scheduler-app .task-name-cell p { color: #737373; font-size: 12px; margin: 7px 0 0; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scheduler-app .target-name { margin-bottom: 7px; font-size: 13px; }
+.scheduler-app .platform-label { display: inline-flex; align-items: center; gap: 5px; color: #737373; font-size: 12px; }
+.scheduler-app .platform-label > span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.scheduler-app .platform-label.weixin { color: #737373; }
+.scheduler-app .schedule-cell strong { font-size: 13px; font-weight: 500; white-space: nowrap; }
+.scheduler-app .schedule-cell .anticon { color: #a3a3a3; margin-right: 3px; }
+.scheduler-app .schedule-cell p { color: #737373; font-size: 12px; margin: 7px 0 0; }
+.scheduler-app .enabled-text { color: #525252; font-size: 12px; }
+.scheduler-app .secondary-text, .scheduler-drawer .secondary-text { color: #737373; font-size: 12px; }
+.scheduler-app .row-actions { display: flex; flex-wrap: wrap; gap: 2px 3px; }
+.scheduler-app .row-actions .kdb-btn { font-size: 12px; padding-inline: 3px; }
+.scheduler-app .table-footer { display: flex; justify-content: space-between; gap: 10px; padding: 17px 26px; color: #737373; font-size: 12px; }
+.scheduler-app .page-footer { text-align: center; padding: 25px 0 0; font-size: 12px; color: #737373; }
+.scheduler-drawer .editor-notice { margin-bottom: 25px; }
+.scheduler-drawer .editor-section-label { color: #737373; letter-spacing: 1px; font-size: 11px; font-weight: 600; margin-bottom: 20px; }
+.scheduler-drawer .editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.scheduler-drawer .editor-footer .kdb-typography { font-size: 12px; }
+.scheduler-drawer .editor-enable { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.scheduler-drawer .editor-enable strong { font-size: 14px; font-weight: 500; }
+.scheduler-drawer .editor-enable p, .scheduler-drawer .editor-platform-note { font-size: 12px; color: #737373; line-height: 1.8; margin: 8px 0 0; }
+.scheduler-drawer .preview-recipient { margin: 29px 0 22px; }
+.scheduler-drawer .preview-recipient h3 { font-size: 20px; margin: 10px 0; }
+.scheduler-drawer .preview-recipient p { color: #737373; font-size: 13px; }
+.scheduler-drawer .message-bubble { background: #fafafa; border: 1px solid #e5e5e5; border-radius: 8px; padding: 24px; margin-bottom: 20px; }
+.scheduler-drawer .message-bubble pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.9; margin: 0; }
+@media (min-width: 1500px) { .scheduler-main { padding-top: 40px; } }
+@media (max-width: 900px) {
+  .scheduler-main { padding: 24px; }
+  .scheduler-app .table-toolbar { flex-wrap: wrap; }
+}
+@media (max-width: 600px) {
+  .scheduler-main { padding: 22px 14px; }
+  .scheduler-app .brand-bar { padding: 0 16px; height: 65px; }
+  .scheduler-app .brand { gap: 8px; }
+  .scheduler-app .brand-divider, .scheduler-app .brand > span:last-child { display: none; }
+  .scheduler-app .brand strong { font-size: 17px; }
+  .scheduler-app .page-heading { align-items: flex-start; flex-direction: column; gap: 18px; }
+  .scheduler-app h1 { font-size: 28px; }
+  .scheduler-app .page-heading > .kdb-btn { width: 100%; }
+  .scheduler-app .panel-heading { padding: 20px 16px; }
+  .scheduler-app .panel-heading > div { display: block; }
+  .scheduler-app .panel-heading > div > span { display: block; margin-top: 6px; }
+  .scheduler-app .table-toolbar { padding: 0 16px 16px; }
+  .scheduler-app .filters { width: 100%; }
+  .scheduler-app .filters .kdb-input-affix-wrapper { width: auto; flex: 1; }
+  .scheduler-app .filters .kdb-select { flex-shrink: 0; }
+  .scheduler-app .table-footer { padding: 16px; flex-direction: column; }
+  .scheduler-drawer .kdb-drawer-body { padding: 20px; }
+  .scheduler-drawer .editor-footer { flex-direction: column; align-items: stretch; }
+  .scheduler-drawer .editor-footer > .kdb-space { justify-content: flex-end; }
+}
+.scheduler-embedded { min-height: 0; min-width: 0; background: transparent; }
+.scheduler-embedded .scheduler-main { max-width: 100%; margin: 0; padding: 0; }
+.scheduler-embedded .page-heading { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.scheduler-embedded .page-heading > .kdb-btn { width: auto; height: 34px; padding: 0 12px; flex-shrink: 0; }
+.scheduler-embedded .eyebrow { display: none; }
+.scheduler-embedded h1 { font-size: 22px; margin: 0 0 8px; }
+.scheduler-embedded .panel-heading { padding: 16px 0; gap: 10px; }
+.scheduler-embedded .panel-heading > div { display: block; }
+.scheduler-embedded .panel-heading > div > span { display: block; margin-top: 6px; }
+.scheduler-embedded .table-toolbar { flex-direction: column; padding: 0 0 12px; }
+.scheduler-embedded .filters { width: 100%; }
+.scheduler-embedded .filters .kdb-input-affix-wrapper { width: 0; flex: 1; }
+.scheduler-embedded .filters .kdb-select { flex-shrink: 0; }
+.scheduler-embedded .embedded-task-list { padding: 0; }
+.scheduler-embedded .kdb-list-item { padding: 0 0 12px; border: none; }
+.scheduler-embedded .kdb-card { width: 100%; min-width: 0; }
+.scheduler-embedded .kdb-card-head-title { white-space: normal; overflow-wrap: anywhere; }
+.scheduler-embedded .kdb-card p { margin: 0 0 10px; overflow-wrap: anywhere; }
+.scheduler-embedded .table-footer { padding: 12px 0; flex-wrap: wrap; }
+
+.scheduler-app .task-summary { display: flex; flex-wrap: wrap; gap: 24px; padding: 12px 0; border-bottom: 1px solid #eeeeee; color: #737373; font-size: 13px; }
+.scheduler-app .task-summary strong { margin-left: 6px; color: #262626; font-weight: 500; }
+.scheduler-app .page-footer { text-align: left; padding-top: 16px; line-height: 1.7; }
+.scheduler-embedded .kdb-card { border-radius: 8px; box-shadow: none; }
+.scheduler-drawer .editor-section-label { letter-spacing: 0; font-size: 12px; margin-bottom: 16px; }

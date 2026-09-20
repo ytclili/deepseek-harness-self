@@ -1,0 +1,15 @@
+--- a/src/channels/feishu/bridge.mjs
++++ b/src/channels/feishu/bridge.mjs
+@@ -4063,7 +4063,12 @@
+   }
+ 
+   #interactionAskOptions(event, key, files) {
++    const openId = strictSenderOpenId(event);
+     return {
++      // Identity comes only from an admitted native private-message event.
++      ...(event.message.chat_type === 'p2p' && this.#botId && openId
++        ? { principal: { platform: 'feishu', botId: this.#botId, senderId: openId } }
++        : {}),
+       timeoutMs: this.#replyTimeoutMs,
+       signal: this.#signal,
+       control: { owner: this, key },
