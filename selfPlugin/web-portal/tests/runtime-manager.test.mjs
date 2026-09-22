@@ -46,6 +46,132 @@ function fixture(overrides = {}, dependencies = {}) {
 }
 const signal = () => new AbortController().signal
 
+test('same business token with renewed expiry refreshes the private credential file', async t => {
+  const { manager, prepared } = fixture()
+  t.after(() => manager.close())
+  const first = { ...identity(), expiresAt: new Date(Date.now() + 60_000).toISOString() }
+  await manager.ensure(first, signal())
+  const second = { ...first, expiresAt: new Date(Date.now() + 120_000).toISOString() }
+  await manager.ensure(second, signal())
+  assert.equal(prepared.length, 2)
+  assert.equal(prepared[1].id.expiresAt, second.expiresAt)
+})
+
+test('failed refresh destroys the old runtime and queued callers cannot reuse its credentials', async t => {
+  let release
+  let entered
+  const started = new Promise(resolve => { entered = resolve })
+  const gate = new Promise(resolve => { release = resolve })
+  const { manager, docker } = fixture({}, { prepare: async id => {
+    if (id.token === 'rotated') { entered(); await gate; throw new Error('refresh-secret-canary') }
+  } })
+  t.after(() => manager.close())
+  await manager.ensure(identity(), signal())
+  const changed = manager.ensure(identity('a', 'rotated'), signal())
+  await started
+  const queued = manager.ensure(identity(), signal())
+  await new Promise(resolve => setImmediate(resolve))
+  release()
+  const outcomes = await Promise.allSettled([changed, queued])
+  assert(outcomes.every(outcome => outcome.status === 'rejected'))
+  assert(outcomes.every(outcome => outcome.reason.code === 'RUNTIME_INVALIDATED'))
+  assert(!JSON.stringify(outcomes.map(outcome => outcome.reason?.message)).includes('refresh-secret-canary'))
+  await manager.stop(key(identity()))
+  assert.equal(docker.containers.size, 0)
+  assert.equal(docker.networks.size, 0)
+  await manager.ensure(identity('a', 'fresh'), signal())
+  assert.equal(docker.calls.filter(call => call.path.startsWith('/containers/create')).length, 2)
+})
+
+test('stop during credential preparation cannot return an already removed runtime', async t => {
+  let entered
+  let release
+  const started = new Promise(resolve => { entered = resolve })
+  const gate = new Promise(resolve => { release = resolve })
+  const { manager, docker } = fixture({}, { prepare: async id => {
+    if (id.token === 'rotated') { entered(); await gate }
+  } })
+  t.after(() => manager.close())
+  await manager.ensure(identity(), signal())
+  const changed = manager.ensure(identity('a', 'rotated'), signal())
+  await started
+  const queued = manager.ensure(identity(), signal())
+  await new Promise(resolve => setImmediate(resolve))
+  const stopped = manager.stop(key(identity()))
+  release()
+  const outcomes = await Promise.allSettled([changed, queued])
+  await stopped
+  assert(outcomes.every(outcome => outcome.status === 'rejected'))
+  assert.equal(docker.containers.size, 0)
+})
+
+test('cleanup can retry after a transient Docker delete failure without releasing capacity early', async t => {
+  const { manager, docker } = fixture({ maxInstances: 1 })
+  t.after(() => manager.close())
+  await manager.ensure(identity(), signal())
+  const request = docker.request.bind(docker)
+  let fail = true
+  docker.request = async (method, path, options) => {
+    if (method === 'DELETE' && path.startsWith('/containers/') && fail) {
+      fail = false
+      throw new Error('fixture delete failed')
+    }
+    return request(method, path, options)
+  }
+  await assert.rejects(manager.stop(key(identity())), /failed/)
+  await assert.rejects(manager.ensure(identity('b'), signal()), /capacity/)
+  await manager.stop(key(identity()))
+  assert.equal(docker.containers.size, 0)
+  assert.equal(docker.networks.size, 0)
+  await manager.ensure(identity('b'), signal())
+})
+
+test('oversized or malformed logged tokens are never truncated and exchanged', async t => {
+  for (const token of ['a'.repeat(513), 'validtoken%bad', 'validtoken!bad']) {
+    let exchanges = 0
+    const { manager, docker } = fixture({ activationTimeoutMs: 30 }, { exchangeToken: async () => { exchanges++; return 'native=fake' } })
+    t.after(() => manager.close())
+    docker.logs = `http://127.0.0.1:3080/?token=${token}`
+    await assert.rejects(manager.ensure(identity(), signal()), /activation|timeout/i)
+    assert.equal(exchanges, 0)
+    assert.equal(docker.containers.size, 0)
+    assert.equal(docker.networks.size, 0)
+  }
+})
+
+test('refresh invalidation is reported before delayed Docker cleanup finishes', async t => {
+  const { manager, docker } = fixture({}, { prepare: async id => {
+    if (id.token === 'rotated') throw new Error('fixture refresh failure')
+  } })
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  t.after(async () => { release(); await manager.close() })
+  await manager.ensure(identity(), signal())
+  const request = docker.request.bind(docker)
+  docker.request = async (method, path, options) => {
+    if (method === 'DELETE' && path.startsWith('/containers/')) await gate
+    return request(method, path, options)
+  }
+  const outcome = await Promise.race([
+    manager.ensure(identity('a', 'rotated'), signal()).then(() => 'success', error => error.code),
+    new Promise(resolve => setTimeout(() => resolve('cleanup-blocked'), 30)),
+  ])
+  assert.equal(outcome, 'RUNTIME_INVALIDATED')
+})
+
+test('failed recreation of a previously running container invalidates existing sessions', async t => {
+  const { manager, docker } = fixture()
+  t.after(() => manager.close())
+  await manager.ensure(identity(), signal())
+  docker.containers.get(`${config.containerPrefix}-${key(identity())}`).State.Running = false
+  const request = docker.request.bind(docker)
+  docker.request = async (method, path, options) => {
+    if (path.startsWith('/containers/create')) throw new Error('fixture create failure')
+    return request(method, path, options)
+  }
+  await assert.rejects(manager.ensure(identity(), signal()), { code: 'RUNTIME_INVALIDATED' })
+})
+
 test('two users have distinct private mounts and networks with restricted Docker configuration', async () => {
   const { manager, docker, prepared } = fixture()
   const [a, b] = await Promise.all([manager.ensure(identity('a'), signal()), manager.ensure(identity('b'), signal())])

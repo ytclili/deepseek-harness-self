@@ -1,7 +1,8 @@
 /** Runs only inside a user's container. Never read an administrator home or inherit its environment. */
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
-import { lstat, mkdir, open, symlink, unlink } from 'node:fs/promises'
+import { lstat, mkdir, open, rename, symlink, unlink } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -102,19 +103,29 @@ export async function prepareUserHome({ home, control, appRoot } = defaults) {
   validatePatch(parseJson(patchText))
   const profile = join(home, 'profiles/web')
   for (const path of [home, join(home, 'profiles'), profile, join(profile, 'node_modules')]) await directory(path)
+  // Prevent the official one-time importer from restoring a stale provider
+  // over the private deployment settings. Preserve the old bytes for recovery.
+  try { await rename(join(home, 'settings.yaml'), join(home, `settings.yaml.portal-backup-${randomUUID()}`)) }
+  catch (error) { if (error.code !== 'ENOENT') throw error }
   const dependencies = { 'dsh-web-portal': `link:${appRoot}/selfPlugin/web-portal`, 'dsh-enterprise-tools': `link:${appRoot}/selfPlugin/enterprise-tools` }
-  await writePrivate(join(home, 'settings.yaml'), `${JSON.stringify(settings)}\n`)
+  // Harness 0.1.7 reads entry configuration from profile patches. Do not
+  // recreate settings.yaml and trigger the one-time legacy importer on restart.
+  const configPatch = [
+    { id: 'llm-pi-ai', config: settings['llm-pi-ai'] },
+    { id: 'agent-default-model', config: settings['agent-default-model'] },
+    { id: 'ui-settings-general', config: settings['ui-onboarding'] },
+  ]
   await writePrivate(join(profile, 'package.json'), `${JSON.stringify({ name: 'dsh-profile-web', private: true, type: 'module', dependencies, dsh: { profile: { bundles, patchReload: 'startup' } } })}\n`)
   // The approved profile is rebuilt at startup; persisted custom patch files cannot add another surface.
   await writePrivate(join(home, 'cordis.patch.yml'), '[]\n')
-  await writePrivate(join(profile, 'cordis.patch.yml'), '[]\n')
+  await writePrivate(join(profile, 'cordis.patch.yml'), `${JSON.stringify(configPatch)}\n`)
   for (const [name, target] of Object.entries(dependencies)) await localLink(join(profile, 'node_modules', name), target.slice(5))
   return { modelKey }
 }
 
 export async function runUserEntrypoint({ home = defaults.home, control = defaults.control, appRoot = defaults.appRoot, spawnProcess = spawn, processSignals = process } = {}) {
   const { modelKey } = await prepareUserHome({ home, control, appRoot })
-  const child = spawnProcess(process.execPath, ['--import', join(appRoot, 'node_modules/tsx/dist/esm/index.mjs'), join(appRoot, 'apps/cli/src/bin.ts'), 'web', '--patch', join(control, 'user.patch.json'), '--port', '3080', '--no-open'], {
+  const child = spawnProcess(process.execPath, [join(appRoot, 'apps/cli/lib/bin.js'), 'web', '--patch', join(control, 'user.patch.json'), '--port', '3080', '--no-open'], {
     cwd: '/workspace', stdio: 'inherit', env: {
       HOME: '/home/node', DSH_HOME: home, PORTAL_MODEL_KEY: modelKey, NODE_ENV: 'production', DSH_TELEMETRY_DISABLED: '1',
       PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', LANG: 'C.UTF-8',

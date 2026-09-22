@@ -39,6 +39,7 @@ export async function readGatewayConfig(path: string): Promise<GatewayConfig> {
   for (const value of [config.sessionTtlMs, config.maxSessions, config.proxyTimeoutMs, config.maxProxyBodyBytes, config.businessTimeoutMs, config.goodsMaxItems, config.model.maxBodyBytes, config.model.timeoutMs, config.model.maxConcurrent]) {
     if (!Number.isSafeInteger(value) || value <= 0 || value > 2_147_483_647) throw new Error('Invalid portal budget')
   }
+  if (config.businessTimeoutMs > 60_000 || config.goodsMaxItems > 100) throw new Error('Invalid business tool limits')
   if (!isAbsolute(config.networkPolicyFile) || !isAbsolute(config.model.apiKeyFile)) throw new Error('Portal private file paths must be absolute')
   const internal = new URL(config.model.runtimeBaseUrl)
   if (internal.protocol !== 'http:' || internal.hostname !== 'host.docker.internal' || !internal.port || internal.username || internal.password || internal.search || internal.hash || internal.pathname !== '/portal/model/v1') throw new Error('Invalid runtime model route')

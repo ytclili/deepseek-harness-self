@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { mkdtemp, mkdir, readFile, readlink, writeFile, symlink, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readlink, readdir, writeFile, symlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -28,12 +28,17 @@ test('entrypoint creates only the approved profile and local links, preserving n
   const config = await fixture(t)
   const result = await prepareUserHome(config)
   assert.equal(result.modelKey, capability)
-  assert.deepEqual(JSON.parse(await readFile(join(config.home, 'settings.yaml'), 'utf8')), settings)
+  await assert.rejects(readFile(join(config.home, 'settings.yaml')), { code: 'ENOENT' })
   const profile = join(config.home, 'profiles/web')
   const manifest = JSON.parse(await readFile(join(profile, 'package.json'), 'utf8'))
   assert.deepEqual(manifest.dsh.profile.bundles, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
   assert.equal(manifest.dsh.profile.patchReload, 'startup')
   assert.equal(manifest.dependencies['dsh-web-portal'], `link:${config.appRoot}/selfPlugin/web-portal`)
+  assert.deepEqual(JSON.parse(await readFile(join(profile, 'cordis.patch.yml'), 'utf8')), [
+    { id: 'llm-pi-ai', config: settings['llm-pi-ai'] },
+    { id: 'agent-default-model', config: settings['agent-default-model'] },
+    { id: 'ui-settings-general', config: settings['ui-onboarding'] },
+  ])
   assert.equal(await readlink(join(profile, 'node_modules/dsh-web-portal')), `${config.appRoot}/selfPlugin/web-portal`)
   assert.equal(await readlink(join(profile, 'node_modules/dsh-enterprise-tools')), `${config.appRoot}/selfPlugin/enterprise-tools`)
   assert.equal(await readFile(join(config.home, '.credentials.yaml'), 'utf8'), 'native-credentials-must-survive')
@@ -52,6 +57,19 @@ test('entrypoint rejects extra providers, arbitrary plugins, unexpected paths, a
   await assert.rejects(prepareUserHome(config), /directory|ELOOP|ENOTDIR/)
 })
 
+test('entrypoint archives legacy settings so the official importer cannot override portal configuration', async t => {
+  const config = await fixture(t)
+  const legacy = 'agent-default-model:\n  provider: obsolete\n  model: obsolete\n'
+  await writeFile(join(config.home, 'settings.yaml'), legacy)
+  await prepareUserHome(config)
+  await assert.rejects(readFile(join(config.home, 'settings.yaml')), { code: 'ENOENT' })
+  const backups = (await readdir(config.home)).filter(name => name.startsWith('settings.yaml.portal-backup-'))
+  assert.equal(backups.length, 1)
+  assert.equal(await readFile(join(config.home, backups[0]), 'utf8'), legacy)
+  await prepareUserHome(config)
+  assert.equal((await readdir(config.home)).filter(name => name.startsWith('settings.yaml.portal-backup-')).length, 1)
+})
+
 test('official CLI spawn receives controlled environment and forwards termination signals', async t => {
   const config = await fixture(t)
   const child = new EventEmitter()
@@ -62,7 +80,7 @@ test('official CLI spawn receives controlled environment and forwards terminatio
   const running = runUserEntrypoint({ ...config, processSignals: signals, spawnProcess: (...args) => { call = args; queueMicrotask(() => { signals.emit('SIGTERM'); child.emit('exit', 0, null) }); return child } })
   assert.equal(await running, 0)
   assert.equal(call[0], process.execPath)
-  assert.deepEqual(call[1], ['--import', `${config.appRoot}/node_modules/tsx/dist/esm/index.mjs`, `${config.appRoot}/apps/cli/src/bin.ts`, 'web', '--patch', `${config.control}/user.patch.json`, '--port', '3080', '--no-open'])
+  assert.deepEqual(call[1], [`${config.appRoot}/apps/cli/lib/bin.js`, 'web', '--patch', `${config.control}/user.patch.json`, '--port', '3080', '--no-open'])
   assert.equal(call[2].cwd, '/workspace')
   assert.equal(call[2].env.PORTAL_MODEL_KEY, capability)
   assert.equal(call[2].env.DSH_HOME, config.home)

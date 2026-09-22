@@ -46,14 +46,19 @@ export async function installGateway(ctx: Context, config: GatewayConfig, depend
   const proxy = new RuntimeProxy({ timeoutMs: config.proxyTimeoutMs, maxBodyBytes: config.maxProxyBodyBytes })
   const ready = new Map<string, UserRuntime>()
   const pending = new Map<string, number>()
+  const generations = new Map<string, symbol>()
   const stops = new Map<string, Promise<void>>()
   let closed = false
+  const stopRuntime = (key: string) => {
+    if (stops.has(key)) return
+    const stop = dependencies.manager.stop(key).catch(() => { ctx.logger.warn('Portal runtime cleanup failed') }).finally(() => stops.delete(key))
+    stops.set(key, stop)
+  }
   const stopUnused = (key: string) => {
     if (closed || pending.has(key) || sessions.hasKey(key) || stops.has(key)) return
     ready.delete(key)
     dependencies.models.revoke(key)
-    const stop = dependencies.manager.stop(key).catch(() => { ctx.logger.warn('Portal runtime cleanup failed') }).finally(() => stops.delete(key))
-    stops.set(key, stop)
+    stopRuntime(key)
   }
   const sessions = new SessionStore({ ttlMs: config.sessionTtlMs, maxSessions: config.maxSessions, onRevoke(session) {
     proxy.revoke(session)
@@ -63,17 +68,30 @@ export async function installGateway(ctx: Context, config: GatewayConfig, depend
     async ensure(identity, signal) {
       const key = identityKey(identity)
       pending.set(key, (pending.get(key) ?? 0) + 1)
+      const generation = generations.get(key) ?? Symbol()
+      generations.set(key, generation)
       try {
         await stops.get(key)
         signal.throwIfAborted()
         const runtime = await dependencies.manager.ensure(identity, signal)
         signal.throwIfAborted()
+        if (generations.get(key) !== generation) throw new Error('Runtime changed during login')
         dependencies.models.grant(identity)
         ready.set(key, runtime)
         return runtime
+      } catch (error) {
+        if (error !== null && typeof error === 'object' && 'code' in error && error.code === 'RUNTIME_INVALIDATED') {
+          generations.set(key, Symbol())
+          ready.delete(key)
+          dependencies.models.revoke(key)
+          sessions.revokeKey(key)
+          stopRuntime(key)
+        }
+        throw error
       } finally {
         const count = (pending.get(key) ?? 1) - 1
-        if (count) pending.set(key, count); else pending.delete(key)
+        if (count) pending.set(key, count)
+        else { pending.delete(key); generations.delete(key) }
         setImmediate(() => stopUnused(key))
       }
     },

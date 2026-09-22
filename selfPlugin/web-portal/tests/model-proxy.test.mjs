@@ -109,6 +109,17 @@ test('capability expiry cancels an already active stream', async t => {
   assert.ok(Date.now() - started < 1000, 'expiry should cancel before the 2-second inference timeout');
 });
 
+test('expired capability rejects requests but valid relogin renews the running-runtime token', async t => {
+  const f = await fixture(t);
+  const capability = f.proxy.grant(identity('alice', new Date(Date.now() + 40).toISOString()));
+  await delay(80);
+  assert.equal((await f.request(capability)).status, 401);
+  assert.equal(f.proxy.grant(identity('alice', new Date(Date.now() + 1000).toISOString())), capability);
+  assert.equal((await f.request(capability)).status, 200);
+  f.proxy.revoke(identityKey(identity()));
+  assert.notEqual(f.proxy.grant(identity()), capability);
+});
+
 test('oversize payload never reaches upstream and redirects are not followed', async t => {
   const f = await fixture(t, (_req, res) => { res.writeHead(302, { location: '/unapproved' }); res.end(); });
   const capability = f.proxy.grant(identity());

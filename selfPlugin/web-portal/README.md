@@ -1,20 +1,50 @@
-# Web Portal 登录页插件
+# Web Portal 企业账号登录网关
 
-将 NextBOS 智能体登录页面挂到 Harness Web profile。源码位于 `selfPlugin/web-portal`，不修改官方 `packages/`，不新增数据库或持久化文件。
+`dsh-web-portal` 用独立 Harness profile 提供账号密码登录，并将通过验证的用户连接到各自的 Docker Harness 实例。兼容 Harness 0.1.7-alpha.1；源码和部署脚本位于 `selfPlugin/web-portal`，不修改官方 `packages/` 或 ERP 数据库。
 
-## 当前能力
+## 登录与隔离
 
-- 未登录访问 `/` 显示登录页；`/login` 可直接打开。
-- 深色布局、粒子球、账号密码必填校验、密码显隐、回车提交和手机布局。
-- 页面资源统一使用 `/web-portal/`，仅提供已构建的 JS、CSS、SVG，未知资源返回 404。
-- 原生管理员启动链接 `/?token=...` 仍由 Harness Connection 验证和设置 Cookie；已获得原生 Cookie 的浏览器进入原 Harness 页面。
-- `/api` 和实时连接继续由原插件处理。公开页面不注入 Harness 启动数据，不发放管理员 Cookie。
+浏览器提交账号密码到 `/portal/login`，网关复用 `enterprise-auth` 的 HTTP 登录适配器调用配置的业务后端。只有后端返回有效 Token、租户 ID 和用户 ID 后，才准备用户实例并发放登录 Cookie。错误密码返回 401；后端或实例启动失败返回 503，不发放登录态。密码不落盘，浏览器不接收业务 Token、模型密钥或 Harness 原生管理员 Token。
 
-**这是登录界面插件，账号服务尚未接入。** 表单提交只演示加载和提示，清空密码，不发送网络请求、不保存账号密码、不创建登录态、不跳转进入 Harness。原生管理员 Cookie 仍代表当前实例的共享管理权限，并不代表独立用户。不能将本阶段当作多用户隔离方案，也不要向普通用户分发管理员 Token。
+实例由后端身份中的 `(tenantId, userId)` 决定。不同用户和不同租户使用独立容器、网络、HOME、工作目录、会话文件与业务凭据。同一身份在多个浏览器登录时共享自己的工作区。浏览器提供的用户名、URL 参数或转发头不能指定实例目标。网关代理 HTTP 和原生 WebSocket，并替换上游凭据。
 
-## 构建与测试
+浏览器登录态保存在网关内存中，最长有效期由 `sessionTtlMs` 和业务 Token 过期时间共同限制。退出、过期立即撤销该浏览器的 HTTP 流和 WebSocket；最后一个登录态消失后停止该用户实例，但保留其 HOME 和工作目录。网关重启后需重新登录。已在线的同用户凭据刷新失败时，旧实例与全部同身份登录态会失效，避免继续使用已失效的业务身份。
 
-先按仓库文档安装并构建 Harness，然后在 Harness 根目录执行：
+用户模型请求通过网关的限时能力令牌转发，真实模型密钥只在网关中读取。用户容器不挂载 Docker socket、管理员 `.dsh` 或其他用户目录；用户可运行自己实例内的 Harness 工具，因此部署必须同时安装并验证 Docker 网络隔离规则。仅创建不同目录不能替代容器和网络隔离。Web 用户不会自动继承管理员微信、飞书绑定或定时任务。
+
+## 页面与接口
+
+| 路径 | 方法 | 行为 |
+| --- | --- | --- |
+| `/` | GET / HEAD | 匿名时显示登录页，登录后代理自己的 Harness |
+| `/login` | GET / HEAD | 登录页；已登录时提供进入工作区和退出按钮 |
+| `/portal/login` | POST | JSON `{ "account": "…", "password": "…" }`，调用业务后端验证 |
+| `/portal/session` | GET | 查询当前浏览器是否登录及过期时间 |
+| `/portal/logout` | POST | 撤销当前浏览器登录态并清 Cookie |
+| `/web-portal/*` | GET / HEAD | 已构建的登录页资源与账号入口样式 |
+
+工作区首页提供“账号 / 退出”入口，前往 `/login`。登录页保留账号密码必填校验、密码显隐、回车提交及手机布局；错误时清空密码。会话 Cookie 为 HttpOnly、SameSite=Strict，HTTPS 环境同时使用 Secure。请求 Host/Origin 必须匹配 `publicOrigin`，写操作需要同源 Origin。
+
+## 配置与部署入口
+
+网关使用专用 `portal` profile，默认监听 23080；已有管理员和 IM 服务继续使用 3080。不要将本插件加入已有的 `web` profile：插件检测到共享原生 connection 时会拒绝启动。单独运行 `docker start deepseek-harness` 只会启动原服务，不会自动出现登录网关。
+
+完整的 Linux 构建、私有配置、网络验证、启动与更新步骤见 [iStoreOS 部署说明](deploy/DEPLOYMENT.md)。配置参考 [gateway.json](examples/gateway.json)：
+
+- `backend`：复用企业登录适配器字段，示例将账号映射为 `email`，从返回值读取 `token`、`user.id`、`tenant.id` 和 `expires_at`。根据真实接口核对；不会把任意非空账号密码视为成功。
+- `publicOrigin`：浏览器实际访问的完整 origin。示例为回环验证地址；公网反向代理切换时设置 `https://harness.nextbos.cn` 并保留 Host、Origin 和 WebSocket 转发。
+- `docker`：镜像、宿主机数据目录及网关容器内挂载路径；限制实例数量、CPU、内存、PID 和启动时限。
+- `model`：上游模型地址、模型名及仅网关可读的密钥文件。用户侧地址固定指向网关模型路由。
+- `networkPolicyFile`：宿主机实际安装规则并通过检查后生成的标记；缺失或不匹配时拒绝启动。
+- `businessTimeoutMs` / `goodsMaxItems`：业务工具超时不超过 60000 毫秒，每次商品查询上限不超过 100。
+
+服务器目录统一位于 `/mnt/sata4-2/www/code/deepseek-harness-runtime/portal`：`gateway/` 存放私有配置与模型密钥，`users/` 存放每用户数据，`build/` 存放镜像构建上下文。模型密钥、业务 Token、密码、会话文件和构建输出不得提交 Git。备份数据时同时保留目录权限；日志不得输出凭据。
+
+用户启动脚本通过正式编译后的 `dsh` CLI 启动 `web` profile，在其 profile 补丁中配置模型和界面。遗留 `settings.yaml` 会原样重命名为带随机后缀的备份，避免旧配置导入覆盖网关生成的模型配置；原生凭据与会话数据保留。
+
+## 本地构建与验证
+
+先按仓库说明完成官方 Harness 构建及 `enterprise-auth`、`enterprise-tools` 构建，再在仓库根目录运行：
 
 ```sh
 npm --prefix selfPlugin/web-portal run setup
@@ -23,48 +53,8 @@ npm --prefix selfPlugin/web-portal run check
 npm --prefix selfPlugin/web-portal test
 ```
 
-`setup` 将 Host 依赖链接到同一份 Harness，避免 Cordis 被重复加载。`client/` 独立维护 npm 锁文件，不纳入官方 pnpm workspace。构建输出为 `dist/` 和 `client/dist/`，均忽略入 Git。不要跨 Mac/Linux 复制 `node_modules`，应在服务器重新运行以上命令。
+`setup` 在创建链接前逐项检查 manifest 中的 peer 版本，将插件连接到同一份 Harness。插件不加入官方 pnpm workspace；`dist/`、`client/dist/` 和依赖目录不入 Git。Mac 与 Linux 的依赖及原生产物不能混用。
 
-## 安装到 Web profile
+测试使用临时目录、端口和测试凭据，覆盖登录拒绝、后端身份选实例、跨租户隔离、退出与过期、流和 WebSocket 撤销、凭据刷新并发、模型代理与 Docker 请求约束。正式 CLI profile 测试启动两个真实 Harness 实例，验证模型加载、会话列表分离和原生 Cookie 不能跨用；独立网关测试通过真实 HTTP 登录适配器拒绝错误密码。测试不调用真实 ERP 或模型，也不创建业务订单。
 
-在准备启用的机器上，从 Harness 根目录执行：
-
-```sh
-pnpm dsh plugin --profile web add link:./selfPlugin/web-portal --ignore-scripts
-```
-
-然后重启原有 Harness 进程。开发环境也可用以下命令启动；如果已有进程占用 3080，先关闭对应进程或选择另一个端口，不要重复启动包含 IM/定时任务的同一 profile：
-
-```sh
-pnpm dsh web --no-open
-```
-
-访问 `http://127.0.0.1:3080/login` 查看页面。匿名访问根路径也显示该页面。域名部署继续沿用既有 `trustedHosts` 设置；本插件不更改监听端口、反向代理或域名配置。重建插件后重启 Harness，使内存中的页面和资源更新。
-
-## 配置
-
-默认 `cordis.patch.yml` 注册 `web-portal`，设置 `takeoverRoot: true`。如只想提供 `/login`，在相应 profile 的补丁文件加入：
-
-```yaml
-- id: web-portal
-  config:
-    takeoverRoot: false
-```
-
-`harnessDistIndex` 是可选的原生前端 `index.html` 绝对路径，只有部署使用自定义原生前端构建时需要设置。默认解析当前 Harness 的 `@deepseek-ai/dsh-web-frontend/dist/index.html`。缺少构建文件时插件启动失败，不会留下部分路由。
-
-## 取消启用
-
-```sh
-pnpm dsh plugin --profile web remove dsh-web-portal
-```
-
-再重启原有进程。插件所有路由通过 Cordis effect 注册，卸载会撤销自身路由，恢复官方首页的鉴权行为。
-
-## 验证范围
-
-`npm test` 使用临时端口、临时原生页面和内存凭据，组合真实 Cordis、WebServer、Connection 插件，覆盖匿名入口、原生 Token/Cookie、未登录 API 拒绝、Host/Origin 拒绝、资源范围、HEAD、非读取方法拒绝、卸载重载及加载失败清理。测试不访问 ERP、不调用模型、不创建业务数据。
-
-不发布独立 runtime invariant：插件没有独立持久化状态，所有路由生命周期由 Cordis effect 管理，安全行为通过 HTTP 测试观察。
-
-后续真实登录需独立接入账号验证、用户身份和实例/数据隔离；微信/飞书身份与 Web 身份的绑定不在本阶段实现。
+Docker API fixture、部署脚本测试与本机 CLI 验证不等于 Linux 容器隔离验收。服务器启用前仍需执行部署脚本中的实际 nft 检查和网络探测；公网域名切换单独执行。独立持久化关系由目录、Docker 配置及 HTTP 行为验证，本插件不发布空的 runtime invariant。

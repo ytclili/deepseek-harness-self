@@ -20,6 +20,7 @@ export async function prepareRuntime(config: SeedConfig, models: ModelProxy, ide
   signal.throwIfAborted()
   const stat = await lstat(control)
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Invalid runtime control directory')
+  signal.throwIfAborted()
   const capability = models.grant(identity)
   const provider = {
     displayName: 'NextBOS AI', api: 'openai-completions', apiKeyEnv: 'PORTAL_MODEL_KEY',
@@ -41,15 +42,18 @@ export async function prepareRuntime(config: SeedConfig, models: ModelProxy, ide
   }
   for (const [name, value] of Object.entries(files)) {
     signal.throwIfAborted()
-    await atomicControlFile(control, name, value)
+    await atomicControlFile(control, name, value, signal)
   }
 }
 
-async function atomicControlFile(directory: string, name: string, content: string): Promise<void> {
+async function atomicControlFile(directory: string, name: string, content: string, signal: AbortSignal): Promise<void> {
   const temporary = join(directory, `.${name}.${randomBytes(12).toString('hex')}`)
   const handle = await open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
-  try { await handle.writeFile(content); await handle.chown(1000, 1000); await handle.sync() }
-  finally { await handle.close() }
-  try { await rename(temporary, join(directory, name)) }
+  try {
+    try { await handle.writeFile(content); await handle.chown(1000, 1000); await handle.sync() }
+    finally { await handle.close() }
+    signal.throwIfAborted()
+    await rename(temporary, join(directory, name))
+  }
   catch (error) { await unlink(temporary); throw error }
 }

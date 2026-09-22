@@ -9,6 +9,23 @@ import { createLoginController } from '../dist/login-controller.js';
 
 const identity = (userId = 'alice') => ({ tenantId: 'tenant-test', userId, token: 'fake-test-token', expiresAt: null });
 
+test('revoking an identity removes all of its sessions but preserves other identities', () => {
+  const revoked = [];
+  const sessions = new SessionStore({ onRevoke: session => revoked.push(session) });
+  const a1 = sessions.create(identity());
+  const a2 = sessions.create(identity());
+  const b = sessions.create(identity('bob'));
+  sessions.revokeKey(a1.session.key);
+  assert.equal(sessions.get(a1.id), undefined);
+  assert.equal(sessions.get(a2.id), undefined);
+  assert.equal(sessions.hasKey(a1.session.key), false);
+  assert.equal(sessions.get(b.id), b.session);
+  assert.deepEqual(revoked, [a1.session, a2.session]);
+  sessions.revokeKey(a1.session.key);
+  assert.equal(revoked.length, 2);
+  sessions.close();
+});
+
 test('opaque sessions isolate users, expire on a timer, revoke and enforce capacity', async () => {
   const revoked = [];
   const sessions = new SessionStore({ ttlMs: 1000, maxSessions: 2, onRevoke: session => revoked.push(session) });

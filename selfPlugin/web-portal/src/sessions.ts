@@ -59,6 +59,10 @@ export class SessionStore {
 
   revoke(id: string): void { this.remove(this.hash(id)) }
 
+  revokeKey(key: string): void {
+    for (const [hash, entry] of this.entries) if (entry.session.key === key) this.remove(hash)
+  }
+
   close(): void {
     this.closed = true
     for (const hash of this.entries.keys()) this.remove(hash)

@@ -1,0 +1,8 @@
+#!/bin/sh /etc/rc.common
+# Copy to /etc/init.d/dsh-portal only after reviewing DEPLOYMENT.md; enabling is an operator action.
+START=99
+STOP=10
+SERVICE=/mnt/sata4-2/www/code/deepseek-harness-self/selfPlugin/web-portal/deploy/portal-service.sh
+start() { /bin/sh "$SERVICE" start; }
+stop() { /bin/sh "$SERVICE" stop; }
+restart() { stop; start; }

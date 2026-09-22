@@ -28,20 +28,26 @@ async function mounted(t, options = {}) {
         res.writeHead(200, { 'content-type': 'application/json', 'set-cookie': 'native-secret=fake-internal; HttpOnly' });
         res.end(JSON.stringify({ userId: identity.userId, tenantId: identity.tenantId }));
       });
+      const sockets = new Set();
+      server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
+      server.on('upgrade', (req, socket) => {
+        received.push({ userId: identity.userId, url: req.url, headers: req.headers });
+        socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSet-Cookie: native-secret=fake-websocket\r\n\r\n');
+      });
       server.listen(0, '127.0.0.1');
       await once(server, 'listening');
       const runtime = { origin: `http://127.0.0.1:${server.address().port}`, cookie: `native-session=fake-${identity.userId}` };
-      runtimes.set(key, { server, runtime });
+      runtimes.set(key, { server, runtime, sockets });
       return runtime;
     },
     async stop(key) {
       stopped.push(key);
       const entry = runtimes.get(key);
-      if (entry) { runtimes.delete(key); entry.server.closeAllConnections(); await new Promise(resolve => entry.server.close(resolve)); }
+      if (entry) { runtimes.delete(key); for (const socket of entry.sockets) socket.destroy(); entry.server.closeAllConnections(); await new Promise(resolve => entry.server.close(resolve)); }
     },
     async close() {
       managerClosed++;
-      await Promise.all([...runtimes.values()].map(({ server }) => { server.closeAllConnections(); return new Promise(resolve => server.close(resolve)); }));
+      await Promise.all([...runtimes.values()].map(({ server, sockets }) => { for (const socket of sockets) socket.destroy(); server.closeAllConnections(); return new Promise(resolve => server.close(resolve)); }));
       runtimes.clear();
     },
   };
@@ -53,7 +59,7 @@ async function mounted(t, options = {}) {
   };
   const backend = { async login(account, password) {
     if (password !== 'fake-correct') return null;
-    return { tenantId: 'fake-tenant', userId: account, token: 'fake-unchanged-business-token', expiresAt: null };
+    return { tenantId: 'fake-tenant', userId: account, token: 'fake-unchanged-business-token', expiresAt: options.identityExpiry?.(account) ?? null };
   } };
   const config = { publicOrigin: base, sessionTtlMs: options.sessionTtlMs ?? 60_000, maxSessions: 20, proxyTimeoutMs: 3000, maxProxyBodyBytes: 4096, docker: { activationTimeoutMs: 2000 } };
   const plugin = { name: 'test-portal-gateway', inject: ['webServer'], apply: scope => installGateway(scope, config, { backend, manager, models }) };
@@ -65,6 +71,106 @@ async function mounted(t, options = {}) {
   return { ctx, fiber, plugin, base, request, login, ensured, stopped, granted, revoked, received, runtimes, closed: () => ({ manager: managerClosed, models: modelsClosed }) };
 }
 function cookie(response) { return response.headers.get('set-cookie').split(';')[0]; }
+
+async function realtime(t, f, sessionCookie) {
+  const request = httpRequest(f.base + '/api/remote.mux', { headers: { Connection: 'Upgrade', Upgrade: 'websocket', Origin: f.base, Cookie: `${sessionCookie}; native-session=forged-other-user` } });
+  const result = new Promise((resolve, reject) => {
+    request.once('error', reject);
+    request.once('response', response => { response.resume(); resolve({ status: response.statusCode }); });
+    request.once('upgrade', (response, socket) => {
+      t.after(() => socket.destroy());
+      socket.resume();
+      resolve({ status: response.statusCode, headers: response.headers, socket });
+    });
+  });
+  request.end();
+  return result;
+}
+
+test('runtime invalidation revokes every session and stream for that user without affecting another user', async t => {
+  let invalidate = false;
+  const f = await mounted(t, { beforeEnsure: identity => {
+    if (invalidate && identity.userId === 'alice') throw Object.assign(new Error('private-refresh-failure'), { code: 'RUNTIME_INVALIDATED' });
+  } });
+  const a1 = cookie(await f.login('alice'));
+  const a2 = cookie(await f.login('alice'));
+  const b = cookie(await f.login('bob'));
+  const response = await f.request('/stream', { headers: { Cookie: a1 } });
+  const streamClosed = assert.rejects(response.text());
+  const aSocket = await realtime(t, f, a2);
+  const bSocket = await realtime(t, f, b);
+  assert.equal(aSocket.status, 101);
+  assert.equal(bSocket.status, 101);
+  assert.equal(aSocket.headers['set-cookie'], undefined);
+  const socketClosed = once(aSocket.socket, 'close');
+  invalidate = true;
+  const failed = await f.login('alice');
+  assert.equal(failed.status, 503);
+  assert.equal(failed.headers.get('set-cookie'), null);
+  assert.doesNotMatch(await failed.text(), /private-refresh-failure/);
+  for (const sessionCookie of [a1, a2]) assert.equal((await f.request('/portal/session', { headers: { Cookie: sessionCookie } })).status, 401);
+  await Promise.all([streamClosed, socketClosed]);
+  assert.equal((await realtime(t, f, a1)).status, 401);
+  assert.equal((await f.request('/api/test', { headers: { Cookie: a1 } })).status, 401);
+  assert.equal((await f.request('/api/test', { headers: { Cookie: b } })).status, 200);
+  assert.equal(bSocket.socket.destroyed, false);
+  const aKey = identityKey({ tenantId: 'fake-tenant', userId: 'alice' });
+  assert.ok(f.revoked.includes(aKey));
+  assert.ok(f.stopped.includes(aKey));
+  invalidate = false;
+  const replacement = cookie(await f.login('alice'));
+  assert.equal((await f.request('/api/test', { headers: { Cookie: replacement } })).status, 200);
+  assert.equal((await f.request('/api/test', { headers: { Cookie: a2 } })).status, 401);
+});
+
+test('ordinary login preparation errors do not revoke healthy existing sessions', async t => {
+  const f = await mounted(t, { beforeEnsure: (_identity, _signal, count) => { if (count === 2) throw new Error('ordinary-preparation-error'); } });
+  const a = cookie(await f.login('alice'));
+  assert.equal((await f.login('alice')).status, 503);
+  assert.equal((await f.request('/api/test', { headers: { Cookie: a } })).status, 200);
+  assert.deepEqual(f.revoked, []);
+});
+
+test('an earlier in-flight login cannot restore grants after another login invalidates its runtime', async t => {
+  let release;
+  let entered;
+  const waiting = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  const f = await mounted(t, { beforeEnsure: async (_identity, _signal, count) => {
+    if (count === 2) { entered(); await waiting; }
+    if (count === 3) throw Object.assign(new Error('private-refresh-failure'), { code: 'RUNTIME_INVALIDATED' });
+  } });
+  const original = cookie(await f.login('alice'));
+  const stale = f.login('alice');
+  await started;
+  assert.equal((await f.login('alice')).status, 503);
+  assert.equal((await f.request('/portal/session', { headers: { Cookie: original } })).status, 401);
+  release();
+  const late = await stale;
+  assert.equal(late.status, 503);
+  assert.equal(late.headers.get('set-cookie'), null);
+  assert.equal(f.granted.length, 1);
+  await nextTurn();
+  const replacement = cookie(await f.login('alice'));
+  assert.equal((await f.request('/api/test', { headers: { Cookie: replacement } })).status, 200);
+});
+
+test('session expiry closes that users HTTP and WebSocket streams and preserves other users', async t => {
+  const f = await mounted(t, { identityExpiry: account => account === 'alice' ? new Date(Date.now() + 200).toISOString() : null });
+  const a = cookie(await f.login('alice'));
+  const b = cookie(await f.login('bob'));
+  const response = await f.request('/stream', { headers: { Cookie: a } });
+  const streamClosed = assert.rejects(response.text());
+  const aSocket = await realtime(t, f, a);
+  const bSocket = await realtime(t, f, b);
+  assert.equal(aSocket.status, 101);
+  assert.equal(bSocket.status, 101);
+  await Promise.all([streamClosed, once(aSocket.socket, 'close')]);
+  assert.equal((await f.request('/portal/session', { headers: { Cookie: a } })).status, 401);
+  assert.equal((await realtime(t, f, a)).status, 401);
+  assert.equal((await f.request('/api/test', { headers: { Cookie: b } })).status, 200);
+  assert.equal(bSocket.socket.destroyed, false);
+});
 
 test('real Cordis gateway serves public page and built assets without private native credentials', async t => {
   const f = await mounted(t);
@@ -142,13 +248,20 @@ test('logout revokes only that browser session and closes its active HTTP stream
   const b = cookie(await f.login('bob'));
   const stream = await f.request('/stream', { headers: { Cookie: a } });
   const interrupted = assert.rejects(stream.text());
+  const aSocket = await realtime(t, f, a);
+  const bSocket = await realtime(t, f, b);
+  assert.equal(aSocket.status, 101);
+  assert.equal(bSocket.status, 101);
+  const socketClosed = once(aSocket.socket, 'close');
   assert.equal((await f.request('/portal/logout', { method: 'POST', headers: { Origin: f.base, Cookie: a } })).status, 200);
   await interrupted;
+  await socketClosed;
   await nextTurn();
   assert.equal((await f.request('/portal/session', { headers: { Cookie: a } })).status, 401);
   assert.deepEqual(await (await f.request('/api/test', { headers: { Cookie: b } })).json(), { userId: 'bob', tenantId: 'fake-tenant' });
   assert.deepEqual(f.stopped, [identityKey({ tenantId: 'fake-tenant', userId: 'alice' })]);
   assert.deepEqual(f.revoked, f.stopped);
+  assert.equal(bSocket.socket.destroyed, false);
 });
 
 test('same-token relogin renews the model grant and replaces the old browser session without stopping runtime', async t => {

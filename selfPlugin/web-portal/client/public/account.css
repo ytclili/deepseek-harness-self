@@ -1,0 +1,30 @@
+body:has(> .portal-account-link) #root {
+  position: relative;
+  top: 48px;
+  height: calc(100% - 48px);
+}
+
+.portal-account-link {
+  position: fixed;
+  z-index: 1000;
+  top: max(6px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  padding: 7px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  background: #fff;
+  color: #333;
+  font: 13px/1.5 system-ui, sans-serif;
+  text-decoration: none;
+  box-shadow: 0 2px 6px #0000000d;
+}
+
+.portal-account-link:hover {
+  border-color: #1677ff;
+  color: #1677ff;
+}
+
+.portal-account-link:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 3px;
+}

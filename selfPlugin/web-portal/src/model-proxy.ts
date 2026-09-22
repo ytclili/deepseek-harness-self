@@ -33,12 +33,16 @@ export class ModelProxy {
     const now = Date.now()
     const requestedExpiry = Math.min(now + this.config.sessionTtlMs, identity.expiresAt === null ? Infinity : Date.parse(identity.expiresAt))
     if (this.closed || !(requestedExpiry > now)) throw new Error('Model capability unavailable')
-    if ((this.grants.get(key)?.expiresAt ?? Infinity) <= now) this.revoke(key)
     const previous = this.grants.get(key)
     const token = previous?.token ?? randomBytes(32).toString('base64url')
     const expiresAt = Math.max(previous?.expiresAt ?? 0, requestedExpiry)
     if (previous) clearTimeout(previous.timer)
-    const timer = setTimeout(() => this.revoke(key), expiresAt - now)
+    // The runtime reads its capability at startup. Keep the token while a
+    // re-login is pending; expiry denies new calls and cancels existing work.
+    // Only lifecycle revocation removes it permanently.
+    const timer = setTimeout(() => {
+      for (const controller of this.active.get(key) ?? []) controller.abort()
+    }, expiresAt - now)
     timer.unref()
     this.grants.set(key, { token, hash: hash(token), expiresAt, timer })
     return token

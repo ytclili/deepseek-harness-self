@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request } from 'node:http';
 import { once } from 'node:events';
+import { gzipSync, deflateSync, brotliCompressSync } from 'node:zlib';
 import { RuntimeProxy } from '../dist/proxy.js';
 
 const session = key => ({ key, identity: {tenantId:'tenant',userId:key,token:'ERP-'+key,expiresAt:null}, expiresAt:Date.now()+60000 });
@@ -74,4 +75,78 @@ test('connection budgets cover all sessions of a user while allowing another use
   const second=await fetch(entry.origin+'/B');assert.equal(second.status,200);
   assert.equal((await fetch(entry.origin+'/C')).status,429);
   await first.body.cancel();await second.body.cancel();
+});
+
+for (const [encoding, compress] of [['identity', Buffer.from], ['gzip', gzipSync], ['deflate', deflateSync], ['br', brotliCompressSync]]) {
+  test(`native homepage exposes account navigation with ${encoding} HTML`, async t=>{
+    const original='<html><head><title>Harness</title></head><body><div id="app">原生工作台</div></body></html>';
+    const body=compress(original);
+    const proxy=new RuntimeProxy({timeoutMs:2000,maxBodyBytes:4096});t.after(()=>proxy.close());
+    const upstream=await serve(t,(_req,res)=>{
+      res.writeHead(200,{'content-type':'text/html; charset=utf-8','content-encoding':encoding,'content-length':body.length,
+        'content-security-policy':"default-src 'self'; style-src 'self'",'etag':'old-body','content-md5':'old-digest','set-cookie':'native=SECRET'});
+      res.end(body);
+    });
+    const entry=await serve(t,(req,res)=>proxy.http(session('A'),{origin:upstream.origin,cookie:'native=SECRET'},req,res));
+    const result=await fetch(entry.origin+'/');const html=await result.text();
+    assert.equal(result.status,200);
+    assert.match(html,/<a[^>]+href="\/login"[^>]*>账号 \/ 退出<\/a>/);
+    assert.match(html,/<link[^>]+href="\/web-portal\/account.css"/);
+    assert.match(html,/<div id="app">原生工作台<\/div>/);
+    assert.equal(result.headers.get('content-length'),String(Buffer.byteLength(html)));
+    for(const name of ['content-encoding','etag','content-md5','set-cookie'])assert.equal(result.headers.get(name),null);
+    assert.equal(result.headers.get('content-security-policy'),"default-src 'self'; style-src 'self'");
+    assert.doesNotMatch(html,/SECRET|<script|style=/);
+  });
+}
+
+for (const compressed of [false,true]) {
+  test(`oversized ${compressed?'compressed':'plain'} homepage fails before forwarding HTML`, async t=>{
+    const body=Buffer.from('<html><body>'+'x'.repeat(2*1024*1024)+'</body></html>');
+    const proxy=new RuntimeProxy({timeoutMs:2000,maxBodyBytes:4096});t.after(()=>proxy.close());
+    const upstream=await serve(t,(_req,res)=>{res.writeHead(200,{'content-type':'text/html',...(compressed?{'content-encoding':'gzip'}:{})});res.end(compressed?gzipSync(body):body);});
+    const entry=await serve(t,(req,res)=>proxy.http(session('A'),{origin:upstream.origin,cookie:'native=SECRET'},req,res));
+    const result=await fetch(entry.origin+'/');assert.equal(result.status,502);assert.doesNotMatch(await result.text(),/<html>|SECRET/);
+  });
+}
+
+test('malformed compressed homepage fails without leaking upstream contents',async t=>{
+  const proxy=new RuntimeProxy({timeoutMs:2000,maxBodyBytes:4096});t.after(()=>proxy.close());
+  const upstream=await serve(t,(_req,res)=>{res.writeHead(200,{'content-type':'text/html','content-encoding':'gzip'});res.end('private invalid gzip');});
+  const entry=await serve(t,(req,res)=>proxy.http(session('A'),{origin:upstream.origin,cookie:'native'},req,res));
+  const result=await fetch(entry.origin+'/');assert.equal(result.status,502);assert.doesNotMatch(await result.text(),/private/);
+});
+
+test('non-HTML homepage and HTML API responses are passed through unchanged',async t=>{
+  const body=Buffer.from('<html><body>not the homepage</body></html>');const encoded=gzipSync(body);
+  const proxy=new RuntimeProxy({timeoutMs:2000,maxBodyBytes:4096});t.after(()=>proxy.close());
+  const upstream=await serve(t,(req,res)=>{res.writeHead(200,{'content-type':req.url==='/'?'application/octet-stream':'text/html','content-encoding':'gzip','content-length':encoded.length});res.end(encoded);});
+  const entry=await serve(t,(req,res)=>proxy.http(session('A'),{origin:upstream.origin,cookie:'native'},req,res));
+  for(const path of ['/','/api/example']) {
+    const result=await fetch(entry.origin+path);assert.equal(result.headers.get('content-encoding'),'gzip');
+    assert.equal(result.headers.get('content-length'),String(encoded.length));assert.equal(await result.text(),body.toString());
+  }
+});
+
+test('API responses stream their first chunk before upstream completion',async t=>{
+  const proxy=new RuntimeProxy({timeoutMs:2000,maxBodyBytes:4096});t.after(()=>proxy.close());let finish;
+  const upstream=await serve(t,(_req,res)=>{res.writeHead(200,{'content-type':'text/event-stream'});res.write('data: first\n\n');finish=()=>res.end('data: last\n\n');});
+  const entry=await serve(t,(req,res)=>proxy.http(session('A'),{origin:upstream.origin,cookie:'native'},req,res));
+  const result=await fetch(entry.origin+'/api/events');const reader=result.body.getReader();
+  assert.equal(new TextDecoder().decode((await reader.read()).value),'data: first\n\n');finish();
+  assert.equal(new TextDecoder().decode((await reader.read()).value),'data: last\n\n');assert.equal((await reader.read()).done,true);
+});
+
+test('native module combo query syntax survives token filtering byte for byte',async t=>{
+  const combo='/plugins/??@deepseek-ai/dsh-client-modules/client.js,@deepseek-ai/dsh-client-ui-chat/client.js&rev=a1b2';
+  const proxy=new RuntimeProxy({timeoutMs:2000,maxBodyBytes:4096});t.after(()=>proxy.close());
+  const upstream=await serve(t,(req,res)=>{
+    if(req.url!==combo){res.writeHead(404);res.end();return;}
+    res.writeHead(200,{'content-type':'text/javascript'});res.end('window.fixtureModuleLoaded=true;');
+  });
+  const entry=await serve(t,(req,res)=>proxy.http(session('A'),{origin:upstream.origin,cookie:'native'},req,res));
+  for(const path of [combo,combo+'&token=stolen',combo+'&%74oken=stolen&token=again']) {
+    const result=await fetch(entry.origin+path);
+    assert.equal(result.status,200,path);assert.equal(await result.text(),'window.fixtureModuleLoaded=true;');
+  }
 });

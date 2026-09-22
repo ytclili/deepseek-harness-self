@@ -17,12 +17,14 @@ const packages = {
   '@types/node': 'node_modules/@types/node',
   typescript: 'node_modules/typescript',
 };
+// Validate the complete dependency set before changing an existing installation.
+for (const [name, version] of Object.entries(manifest.peerDependencies)) {
+  if (!packages[name]) throw new Error(`No local link configured for ${name}`);
+  const actual = JSON.parse(await readFile(join(harness, packages[name], 'package.json'), 'utf8'));
+  if (actual.name !== name || actual.version !== version) throw new Error(`${name}: Harness ${actual.version} does not match declared ${version}; review compatibility first.`);
+}
 for (const [name, relative] of Object.entries(packages)) {
   const source = await realpath(join(harness, relative));
-  const version = JSON.parse(await readFile(join(source, 'package.json'), 'utf8')).version;
-  if (manifest.peerDependencies[name] && manifest.peerDependencies[name] !== version) {
-    throw new Error(`${name}: Harness ${version} does not match declared ${manifest.peerDependencies[name]}; review compatibility first.`);
-  }
   const target = join(root, 'node_modules', name);
   await mkdir(dirname(target), { recursive: true });
   let stat;

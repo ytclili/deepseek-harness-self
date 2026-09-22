@@ -1,5 +1,7 @@
-# This Dockerfile-specific policy supersedes the source root .dockerignore.
-# Keep node_modules, lib, dist and apps/web/dist: this image is assembled offline.
+# Admit only the separately generated, checked payload.
+*
+!payload/
+!payload/**
 **/.git
 **/.git/**
 **/.env

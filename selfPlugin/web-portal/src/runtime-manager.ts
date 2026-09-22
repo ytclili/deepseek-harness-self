@@ -11,6 +11,12 @@ import { identityKey } from './identity.js'
 const OWNER_LABEL = 'io.dsh.portal.owner'
 const IDENTITY_LABEL = 'io.dsh.portal.identity'
 
+/** Existing sessions must be revoked even while Docker cleanup is still pending. */
+export class RuntimeInvalidatedError extends Error {
+  readonly code = 'RUNTIME_INVALIDATED'
+  constructor() { super('Runtime invalidated; sign in again') }
+}
+
 export interface DockerRuntimeConfig {
   hostDataRoot: string
   dataRoot: string
@@ -116,21 +122,23 @@ export class DockerRuntimeManager implements RuntimeManager {
     if (signal.aborted) throw new Error('Runtime activation cancelled')
     const key = identityKey(identity)
     let entry = this.entries.get(key)
-    if (entry?.stopping) throw new Error('Runtime stopping')
+    if (entry?.stopping) throw new RuntimeInvalidatedError()
     if (entry?.active) {
       let current: OwnedResource | undefined
       try { current = await this.docker.request<OwnedResource>('GET', `/containers/${this.prefix}-${key}/json`, { signal }) }
       catch (error) { if ((error as { statusCode?: number }).statusCode !== 404) throw new Error('Runtime health check failed') }
       if (this.entries.get(key) !== entry) return this.ensure(identity, signal)
-      if (current && (current.Config?.Labels?.[OWNER_LABEL] !== this.owner || current.Config.Labels[IDENTITY_LABEL] !== key)) throw new Error('Runtime ownership conflict')
+      if (current && (current.Config?.Labels?.[OWNER_LABEL] !== this.owner || current.Config.Labels[IDENTITY_LABEL] !== key)) throw new RuntimeInvalidatedError()
       if (!current?.State?.Running || JSON.stringify([current.Id, current.State.StartedAt]) !== entry.containerVersion) {
-        await this.stop(key)
-        return this.ensure(identity, signal)
+        try {
+          await this.stop(key)
+          return await this.ensure(identity, signal)
+        } catch { throw new RuntimeInvalidatedError() }
       }
     }
     if (!entry) {
       if (this.entries.size >= this.config.maxInstances) throw new Error('Runtime capacity reached')
-      entry = { controller: new AbortController(), promise: Promise.resolve({ origin: '', cookie: '' }), refresh: Promise.resolve(), credential: identity.token, waiters: 0, active: false, stopping: false, containerVersion: '', stopPromise: undefined }
+      entry = { controller: new AbortController(), promise: Promise.resolve({ origin: '', cookie: '' }), refresh: Promise.resolve(), credential: JSON.stringify([identity.token, identity.expiresAt]), waiters: 0, active: false, stopping: false, containerVersion: '', stopPromise: undefined }
       this.entries.set(key, entry)
       entry.promise = this.activate(identity, key, entry)
     }
@@ -138,20 +146,37 @@ export class DockerRuntimeManager implements RuntimeManager {
     selected.waiters++
     try {
       const runtime = await waitFor(selected.promise, signal)
-      if (selected.stopping || this.closed) throw new Error('Runtime stopping')
+      if (selected.stopping || this.closed) throw new RuntimeInvalidatedError()
       // Serialize refreshed login credentials so a re-login cannot reuse an old backend token.
       const refresh = selected.refresh.then(async () => {
-        if (selected.credential !== identity.token) {
-          const refreshSignal = AbortSignal.any([signal, selected.controller.signal, AbortSignal.timeout(this.config.activationTimeoutMs)])
-          refreshSignal.throwIfAborted()
-          try { await waitFor(this.dependencies.prepare?.(identity, key, this.paths(key), refreshSignal) ?? Promise.resolve(), refreshSignal) }
-          catch { throw new Error('Runtime credentials refresh failed') }
-          refreshSignal.throwIfAborted()
-          selected.credential = identity.token
+        try {
+          if (selected.stopping || this.closed) throw new Error('Runtime stopping')
+          const credential = JSON.stringify([identity.token, identity.expiresAt])
+          if (selected.credential !== credential) {
+            const refreshSignal = AbortSignal.any([signal, selected.controller.signal, AbortSignal.timeout(this.config.activationTimeoutMs)])
+            refreshSignal.throwIfAborted()
+            await waitFor(this.dependencies.prepare?.(identity, key, this.paths(key), refreshSignal) ?? Promise.resolve(), refreshSignal)
+            refreshSignal.throwIfAborted()
+            selected.credential = credential
+          }
+        } catch {
+          // Preparation may already have replaced some credentials. Revoke the
+          // runtime immediately; stop waits for this refresh outside its callback.
+          if (this.entries.get(key) === selected) void this.stop(key).catch(() => {})
+          throw new RuntimeInvalidatedError()
         }
       })
       selected.refresh = refresh.catch(() => {})
-      await waitFor(refresh, signal)
+      try { await waitFor(refresh, signal) }
+      catch (error) {
+        if (selected.stopping) throw new RuntimeInvalidatedError()
+        if (signal.aborted && selected.credential !== JSON.stringify([identity.token, identity.expiresAt])) {
+          if (this.entries.get(key) === selected) void this.stop(key).catch(() => {})
+          throw new RuntimeInvalidatedError()
+        }
+        throw error
+      }
+      if (selected.stopping || this.closed) throw new RuntimeInvalidatedError()
       return runtime
     } finally {
       selected.waiters--
@@ -171,7 +196,10 @@ export class DockerRuntimeManager implements RuntimeManager {
       await entry.refresh
       await this.cleanup(key)
       if (this.entries.get(key) === entry) this.entries.delete(key)
-    })()
+    })().catch(error => {
+      entry.stopPromise = undefined
+      throw error
+    })
     return entry.stopPromise
   }
 
@@ -252,7 +280,7 @@ export class DockerRuntimeManager implements RuntimeManager {
         const origin = `http://127.0.0.1:${binding.HostPort}`
         const logs = await this.docker.request<Buffer>('GET', `/containers/${name}/logs?stdout=true&stderr=true&tail=100`, { signal, raw: true })
         // The token is generated by the trusted native webserver; do not retain or log its launch URL.
-        const token = logs.toString('utf8').match(/https?:\/\/[^\s\x00-\x20]+[?&]token=([a-zA-Z0-9_-]{8,512})/)?.[1]
+        const token = logs.toString('utf8').match(/https?:\/\/[^\s\x00-\x20]+[?&]token=([a-zA-Z0-9_-]{8,512})(?=[&#\s\x00-\x20]|$)/)?.[1]
         if (token) {
           const cookie = await (this.dependencies.exchangeToken ?? exchangeNativeToken)(origin, token, signal)
           signal.throwIfAborted()

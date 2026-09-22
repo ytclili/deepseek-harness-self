@@ -2,8 +2,12 @@
 import { request } from 'node:http'
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http'
 import type { Duplex } from 'node:stream'
+import { Transform, Writable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+import { createGunzip, createInflate, createBrotliDecompress } from 'node:zlib'
 import type { Session } from './sessions.js'
 import type { UserRuntime } from './contracts.js'
+import { workspaceCopy } from './locale.js'
 
 /** HTTP and upgrade forwarding with per-session cancellation. */
 export class RuntimeProxy {
@@ -52,6 +56,21 @@ export class RuntimeProxy {
         headers.location = location.pathname + location.search + location.hash
       }
       headers['cache-control'] = 'no-store'
+      if (req.method === 'GET' && target.pathname === '/' && incoming.statusCode === 200
+        && /^text\/html(?:\s*;|\s*$)/i.test(incoming.headers['content-type'] ?? '')) {
+        void homepageHtml(incoming).then(body => {
+          if (res.destroyed || res.writableEnded) return
+          for (const name of ['content-encoding', 'content-length', 'etag', 'content-md5', 'digest', 'content-digest', 'repr-digest', 'last-modified', 'accept-ranges']) delete headers[name]
+          headers['content-length'] = String(body.length)
+          res.writeHead(200, headers); res.end(body)
+        }).catch(() => {
+          incoming.destroy()
+          if (!res.destroyed && !res.writableEnded) {
+            res.writeHead(502, { 'cache-control': 'no-store' }); res.end('Upstream unavailable')
+          }
+        })
+        return
+      }
       res.writeHead(incoming.statusCode ?? 502, headers)
       incoming.on('error', stop)
       incoming.pipe(res)
@@ -121,6 +140,34 @@ export class RuntimeProxy {
   }
 }
 
+/** Bound both transfer and decoded size; only the native document is buffered. */
+async function homepageHtml(incoming: IncomingMessage): Promise<Buffer> {
+  const limit = 2 * 1024 * 1024
+  const encoding = (incoming.headers['content-encoding'] ?? 'identity').trim().toLowerCase()
+  const decoder = encoding === 'gzip' ? createGunzip() : encoding === 'deflate' ? createInflate()
+    : encoding === 'br' ? createBrotliDecompress() : undefined
+  if (!decoder && encoding !== 'identity') throw new Error('Unsupported HTML encoding')
+  let transferred = 0; let decoded = 0
+  const chunks: Buffer[] = []
+  const bound = new Transform({ transform(chunk: Buffer, _encoding, callback) {
+    transferred += chunk.length
+    callback(transferred > limit ? new Error('HTML transfer too large') : null, chunk)
+  } })
+  const sink = new Writable({ write(chunk: Buffer, _encoding, callback) {
+    decoded += chunk.length
+    if (decoded > limit) { callback(new Error('HTML document too large')); return }
+    chunks.push(chunk); callback()
+  } })
+  if (decoder) await pipeline(incoming, bound, decoder, sink)
+  else await pipeline(incoming, bound, sink)
+  let html = Buffer.concat(chunks).toString('utf8')
+  const stylesheet = '<link rel="stylesheet" href="/web-portal/account.css">'
+  const account = `<a class="portal-account-link" href="/login">${workspaceCopy.account}</a>`
+  html = /<\/head\s*>/i.test(html) ? html.replace(/<\/head\s*>/i, stylesheet + '$&') : stylesheet + html
+  html = /<\/body\s*>/i.test(html) ? html.replace(/<\/body\s*>/i, account + '$&') : html + account
+  return Buffer.from(html)
+}
+
 function cleanHeaders(headers: IncomingHttpHeaders): IncomingHttpHeaders {
   const blocked = new Set(['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', ...(headers.connection ?? '').toLowerCase().split(',').map(x => x.trim())])
   return Object.fromEntries(Object.entries(headers).filter(([name]) => !blocked.has(name)))
@@ -142,6 +189,11 @@ function targetUrl(req: IncomingMessage, runtime: UserRuntime): URL | undefined 
   if (!path.startsWith('/') || path.startsWith('//') || /[\\\r\n]/.test(path)) return undefined
   const url = new URL(path, runtime.origin)
   if (url.origin !== runtime.origin) return undefined
-  url.searchParams.delete('token')
+  // Harness combo routes use a raw ??module-list query; URLSearchParams
+  // serialization would escape that syntax even when no token is present.
+  if (url.searchParams.has('token')) {
+    const query = url.search.slice(1).split('&').filter(part => !new URLSearchParams(part).has('token')).join('&')
+    url.search = query ? '?' + query : ''
+  }
   return url
 }

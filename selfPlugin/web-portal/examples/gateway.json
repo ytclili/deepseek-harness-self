@@ -1,12 +1,12 @@
 {
-  "publicOrigin": "https://harness.nextbos.cn",
-  "networkPolicyFile": "/srv/portal/gateway/network-policy.json",
+  "publicOrigin": "http://127.0.0.1:23080",
+  "networkPolicyFile": "/run/dsh-portal/network-policy.json",
   "sessionTtlMs": 28800000,
   "maxSessions": 1000,
   "docker": {
-    "hostDataRoot": "/mnt/sata4-2/www/code/deepseek-harness-portal",
+    "hostDataRoot": "/mnt/sata4-2/www/code/deepseek-harness-runtime/portal",
     "dataRoot": "/srv/portal",
-    "image": "deepseek-harness-user:portal-v1",
+    "image": "deepseek-harness-portal:0.1.7",
     "maxInstances": 3,
     "memoryBytes": 2147483648,
     "nanoCpus": 1000000000,
