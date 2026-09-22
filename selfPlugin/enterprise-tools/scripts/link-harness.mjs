@@ -22,6 +22,14 @@ const packages = {
   typescript: 'node_modules/typescript',
   'js-yaml': 'packages/boot/app-boot/node_modules/js-yaml',
 }
+const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+for (const [name, expected] of Object.entries(manifest.peerDependencies)) {
+  if (!name.startsWith('@deepseek-ai/')) continue
+  const relative = packages[name]
+  if (!relative) throw new Error(`Harness peer ${name} 尚未配置本地链接。`)
+  const actual = JSON.parse(await readFile(join(harness, relative, 'package.json'), 'utf8'))
+  if (actual.name !== name || actual.version !== expected) throw new Error(`Harness peer ${name} 需要 ${expected}，请先核对接口兼容性。`)
+}
 for (const [name, relative] of Object.entries(packages)) {
   const source = await realpath(join(harness, relative))
   const target = join(root, 'node_modules', name)

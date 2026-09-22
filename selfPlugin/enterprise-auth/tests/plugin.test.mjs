@@ -22,7 +22,7 @@ for (const platform of ['weixin', 'feishu']) test(`pre-step source instructions 
     const decision = messages => ({ kind: 'enter', messages })
     const run = value => ctx.waterfall('agent/pre-step', input, () => Promise.resolve(value))
     const wx = await run(decision([{ role: 'user', source: { kind: 'user', rpcId: 'wx-test' }, content: [] }]))
-    assert.equal(wx.messages.at(-1).source.plugin, 'enterprise-auth')
+    assert.deepEqual(wx.messages.at(-1).source, { kind: 'enterprise-auth', form: 'instructions' })
     assert.match(wx.messages.at(-1).content[0].text, /已验证的私聊/)
     assert.match(ctx.tools.schemas().find(tool => tool.name === 'auth_login').description, /飞书/)
     assert.doesNotMatch(wx.messages.at(-1).content[0].text, /bot-test|sender-test/)

@@ -26,6 +26,8 @@ npm test
 
 需要指定其他 Harness checkout 时执行 `node scripts/link-harness.mjs /绝对路径/deepseek-harness`。
 
+当前兼容基准为 Harness 0.1.7-alpha.1、Cordis 4.0.3、Schemastery 3.18.3。setup 同时核对 peerDependencies 中的依赖版本，官方更新后需重新验证插件再更新版本和基准；不能直接跳过校验。
+
 ## 认证与本地启用
 
 Token 是纯文本单行文件，不带 `Bearer ` 前缀，权限必须为 `600`。默认本机位置是 `$HOME/.dsh/secrets/enterprise-tools.token`。不要把 Token 写进代码、Prompt、配置 patch 或聊天中。插件每次调用读取该文件，更新 Token 后无需重启；读取失败明确报错，不退回匿名请求。

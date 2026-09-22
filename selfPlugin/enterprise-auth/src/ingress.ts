@@ -68,6 +68,10 @@ function samePrincipal(left: Principal, right: Principal): boolean {
 }
 
 function isHostContext(source: Record<string, unknown>): boolean {
+  if (source.kind === 'runtime-context') return source.form === 'snapshot' || source.form === undefined
+  if (source.kind === 'enterprise-auth') return source.form === 'instructions'
+  // Legacy IM context still uses the plugin envelope. Unknown producers and
+  // user inputs must not bypass registration merely by declaring a form.
   return source.kind === 'plugin' && identifier(source.plugin)
     && (source.form === 'instructions' || source.form === 'notice' || source.form === 'snapshot')
 }

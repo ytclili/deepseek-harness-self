@@ -26,7 +26,9 @@ test('equal bot and sender strings from different platforms cannot share a trust
 test('Host context snapshots do not revoke a registered WeChat tool execution', () => {
   const f = fixture()
   f.register(); f.start(); f.user()
-  f.user(undefined, { kind: 'plugin', plugin: 'system-prompt', form: 'snapshot', sections: [] })
+  f.user(undefined, { kind: 'runtime-context', form: 'snapshot', sections: [] })
+  f.user(undefined, { kind: 'runtime-context' }) // Host cleared the prior snapshot.
+  f.user(undefined, { kind: 'enterprise-auth', form: 'instructions' })
   f.assistant()
   assert.deepEqual(f.registry.resolve(f.exec), principal)
 })
@@ -36,7 +38,7 @@ test('pre-step source preview checks the actual batch before durable user/messag
   f.register()
   f.emit('turn/start', { turn: 1 })
   const user = rpcId => ({ role: 'user', source: { kind: 'user', rpcId } })
-  const snapshot = { role: 'user', source: { kind: 'plugin', plugin: 'system-prompt', form: 'snapshot' } }
+  const snapshot = { role: 'user', source: { kind: 'runtime-context', form: 'snapshot', sections: [] } }
   assert.equal(typeof f.registry.isVerifiedStep, 'function')
   assert.equal(f.registry.isVerifiedStep(f.session, 1, 1, [snapshot, user('rpc-a')]), true)
   f.denied() // A preview never grants tool authorization.
@@ -193,6 +195,30 @@ test('missing, unknown, and forged textual identity sources never authenticate',
     flow.session.metadata = { principal }
     flow.assistant()
     flow.denied({ ...flow.exec, principal, userId: 'sender-a' })
+  }
+})
+
+test('a context form cannot hide an unregistered user or unknown producer', () => {
+  for (const kind of ['user', 'unrecognized']) {
+    for (const form of ['instructions', 'notice', 'snapshot']) {
+      const flow = fixture()
+      flow.register(); flow.start(); flow.user()
+      flow.user('web', { kind, form, rpcId: 'web' })
+      flow.assistant(); flow.denied()
+    }
+  }
+})
+
+test('producer context cannot establish identity even with a registered rpcId', () => {
+  for (const source of [
+    { kind: 'runtime-context', form: 'snapshot', sections: [] },
+    { kind: 'runtime-context' },
+    { kind: 'enterprise-auth', form: 'instructions' },
+  ]) {
+    const flow = fixture()
+    flow.register(); flow.start()
+    flow.user('rpc-a', { ...source, rpcId: 'rpc-a' })
+    flow.assistant(); flow.denied()
   }
 })
 

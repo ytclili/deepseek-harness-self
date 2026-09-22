@@ -24,7 +24,7 @@ npm --prefix selfPlugin/kaidanba-scheduler test
 npm --prefix selfPlugin/kaidanba-scheduler run test:client
 ```
 
-`enterprise-tools/harness-version.txt` 记录兼容的 Harness 基准 commit；setup 比对 HEAD 中 `selfPlugin/` 以外的文件，允许单独提交插件代码，不校验未提交的修改。官方更新后先验证兼容性，再更新版本记录。`enterprise-auth` 的 setup 也检查 Harness tools 包版本。不要直接复制其他机器的 node_modules 或绝对路径链接。
+当前三个业务插件的本地验证基准为 Harness 0.1.7-alpha.1。`enterprise-tools/harness-version.txt` 记录兼容的 Harness 基准 commit；setup 比对 HEAD 中 `selfPlugin/` 以外的文件，允许单独提交插件代码，不校验未提交的修改。官方更新后先验证兼容性，再更新版本记录。`enterprise-auth` 和 `enterprise-tools` 的 setup 均检查各自声明的 Harness peer 版本。不要直接复制其他机器的 node_modules 或绝对路径链接。
 
 ## 接入和运行
 

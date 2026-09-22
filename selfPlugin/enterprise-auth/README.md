@@ -12,7 +12,7 @@ nextbos ERP 系统登录与业务 Token 管理的独立 DeepSeek Harness Host �
 
 ## 构建与加载
 
-开发对照 Harness tools 0.1.6-alpha.1、Cordis 4.0.2；Node.js 22.19+ 或 24+。源码位于 Harness 的 `selfPlugin/enterprise-auth/`，默认链接上两级 Harness 目录的现有依赖，无需下载 npm 包。在本插件目录执行：
+开发对照 Harness 0.1.7-alpha.1、Cordis 4.0.3、Schemastery 3.18.3；Node.js 22.19+ 或 24+。setup 按本插件的 peerDependencies 核对 Harness 依赖版本，不匹配时拒绝链接。源码位于 Harness 的 `selfPlugin/enterprise-auth/`，默认链接上两级 Harness 目录的现有依赖，无需下载 npm 包。在本插件目录执行：
 
 ```bash
 npm run setup
@@ -60,6 +60,8 @@ timeoutMs 默认 10000；maxLoginAttempts 默认 5，loginWindowMs 默认 60000�
 支持微信和飞书私聊，不支持群聊或子代理继承登录身份。微信适配器从准入后的真实 `from_user_id` 和运行配置中的机器人 `botId` 构造身份。飞书在 `src/channels/feishu/bridge.mjs` 的共用提交入口，仅接受 `chat_type=p2p`、真实 `sender.sender_id.open_id` 与 Host 配置中的 `botId`；不会回退使用 `user_id`，不会给群聊登记身份。两者共用 `src/channels/shared/harness-client.mjs` 与同进程 `harnessConnection` 登记。RPC 返回 accepted 不会释放；ask 完成、取消或异常退出时释放，TTL 到期也拒绝使用。不同平台的相同 botId/senderId 字符串仍是不同身份，微信登录不自动授权飞书。
 
 插件在 `agent/pre-step` 读取本步最终输入及同一轮仍有效的登记，追加不含身份标识的来源说明。它仅帮助模型选择是否调用工具，不能授权；实际执行仍由实时 Session 事件与当前 assistant tool-call 校验。普通 Host instructions/notice/snapshot 不代表另一个用户，也不授予身份；混入未登记 Web 消息或其他发送者会使该轮失效。Web 全局提示应描述宿主提供 GUI，不应将宿主类型当作每条消息的来源。
+
+新版来源说明使用 `source.kind=enterprise-auth`；允许 Harness 的 `runtime-context` 快照及清空标记，也保留 IM 补丁的旧 `plugin` 上下文格式。未知来源不会仅因声明 instructions/notice/snapshot 而被忽略，宿主上下文本身不能建立登录身份。
 
 登录不会自动重放任何下单请求。后续订单工具负责保留业务参数、查单和幂等，不能把网络超时当作确定失败后重下。统一请求服务不自动重试写请求；结果不明返回 RESULT_UNKNOWN。
 

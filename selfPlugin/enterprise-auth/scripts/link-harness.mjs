@@ -13,8 +13,15 @@ const packages = {
   '@types/node': 'node_modules/@types/node',
   typescript: 'node_modules/typescript',
 }
-const manifest = JSON.parse(await readFile(join(harness, 'packages/core/tools/package.json'), 'utf8'))
-if (manifest.version !== '0.1.6-alpha.1') throw new Error('请先核对该 Harness 版本与插件接口兼容性。')
+const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+// Exact pins are the reviewed compatibility contract; validate before creating any links.
+for (const [name, expected] of Object.entries(manifest.peerDependencies)) {
+  if (!name.startsWith('@deepseek-ai/')) continue
+  const relative = packages[name]
+  if (!relative) throw new Error(`Harness peer ${name} 尚未配置本地链接。`)
+  const actual = JSON.parse(await readFile(join(harness, relative, 'package.json'), 'utf8'))
+  if (actual.name !== name || actual.version !== expected) throw new Error(`Harness peer ${name} 需要 ${expected}，请先核对接口兼容性。`)
+}
 for (const [name, relative] of Object.entries(packages)) {
   const source = await realpath(join(harness, relative))
   const target = join(root, 'node_modules', name)

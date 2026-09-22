@@ -123,7 +123,7 @@ test('real loop admits WeChat login, keeps trust through tool continuation, and 
     assert.ok(replies.length > 0)
     const logged = agent.session.snapshotEvents()
     assert.ok(logged.some(event => event.type === 'user/message' && event.data.source.form === 'snapshot'))
-    const guidance = logged.filter(event => event.type === 'user/message' && event.data.source.plugin === 'enterprise-auth')
+    const guidance = logged.filter(event => event.type === 'user/message' && event.data.source.kind === 'enterprise-auth')
     assert.equal(guidance.length, 2)
     for (const event of guidance) assert.match(event.data.content[0].text, /已验证的私聊/)
     assert.match(JSON.stringify(adapter.requests[1].messages), /AUTHENTICATED/)
@@ -137,7 +137,7 @@ test('real loop admits WeChat login, keeps trust through tool continuation, and 
     assert.equal(adapter.requests.length, 4)
     assert.equal(backendCalls.length, 1, 'unregistered follow-up must not call the login backend')
     assert.match(JSON.stringify(adapter.requests[3].messages), /IDENTITY_REQUIRED/)
-    const currentGuidance = agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.plugin === 'enterprise-auth').slice(-2)
+    const currentGuidance = agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.kind === 'enterprise-auth').slice(-2)
     for (const event of currentGuidance) assert.match(event.data.content[0].text, /未验证/)
   } finally {
     await bridge?.close()

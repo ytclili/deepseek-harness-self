@@ -24,6 +24,12 @@ export type EnterpriseAuth = {
   request(exec: ToolRunContext, input: ApiRequest): Promise<unknown>
 }
 
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'enterprise-auth': { kind: 'enterprise-auth'; form: 'instructions' }
+  }
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     enterpriseAuth: EnterpriseAuth
@@ -76,7 +82,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         + '本说明仅适用于当前步骤，历史来源说明不适用于当前输入。Web GUI 的宿主说明不代表当前消息来自网页。工具仍执行服务端身份校验。'
       return { ...decision, messages: [...decision.messages, createUserMessage({
         content: [{ type: 'text', text }],
-        source: { kind: 'plugin', plugin: name, form: 'instructions' },
+        source: { kind: 'enterprise-auth', form: 'instructions' },
       })] }
     }, { prepend: true })
     ctx.effect(() => ctx.tools.register(createLoginTool((exec, input) => api.login(exec, input))))
