@@ -1,12 +1,13 @@
 # 自定义插件
 
-三个插件随 Harness 仓库一起维护，源码纳入 Git。依赖、构建产物、本地备份和凭据不入库。插件保持独立包，不加入官方 pnpm workspace。
+自定义插件随 Harness 仓库一起维护，源码纳入 Git。依赖、构建产物、本地备份和凭据不入库。插件保持独立包，不加入官方 pnpm workspace。
 
 ```text
 selfPlugin/
   enterprise-auth/      企业登录和身份绑定
   enterprise-tools/     商品查询工具
   kaidanba-scheduler/   定时商品推送
+  web-portal/          Web 登录页（账号服务待接入）
 ```
 
 ## 构建
@@ -38,6 +39,8 @@ npm --prefix selfPlugin/enterprise-tools run install:local
 按 [enterprise-tools 的配置说明](enterprise-tools/README.md) 设置业务服务地址和 Token 文件，按 [enterprise-auth 的补丁说明](enterprise-auth/README.md#微信与飞书-im-接线补丁) 安装对应版本的 IM 补丁后，在 Harness 根目录执行 `pnpm dsh web --no-open`。三个插件由 Harness 加载，无需各自启动常驻进程。
 
 源码目录统一不代表运行数据已迁入仓库。Web profile 配置和 IM 状态仍在 `~/.dsh/profiles/web/`，授权数据在其 `data/enterprise-auth/`，定时任务在其 `data/kaidanba-scheduler/`，商品工具 Token 默认在 `~/.dsh/secrets/enterprise-tools.token`。部署新服务器时单独配置或按各插件的备份恢复说明迁移，不能只复制仓库就得到原来的登录和任务数据。
+
+可选的 [web-portal 登录页插件](web-portal/README.md) 提供匿名首页和 `/login` 页面，构建和启用步骤见其说明。当前仅完成页面，不验证企业账号、不建立用户登录态、不实现多用户隔离，也不替代原生 Harness 管理员鉴权。
 
 ## 更新官方代码
 

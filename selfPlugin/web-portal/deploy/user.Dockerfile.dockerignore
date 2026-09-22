@@ -1,0 +1,35 @@
+# This Dockerfile-specific policy supersedes the source root .dockerignore.
+# Keep node_modules, lib, dist and apps/web/dist: this image is assembled offline.
+**/.git
+**/.git/**
+**/.env
+**/.env.*
+**/*.env
+**/.dsh
+**/.dsh/**
+**/*.token
+**/.credentials.yaml
+**/usersecret
+**/usersecret/**
+**/.codex
+**/.codex/**
+**/.agents
+**/.agents/**
+**/.ssh
+**/.ssh/**
+**/.aws
+**/.aws/**
+**/.npmrc
+**/*.pem
+**/*.key
+**/*.log
+**/logs
+**/logs/**
+**/screenshots
+**/screenshots/**
+**/screenshot*
+**/playwright-report
+**/playwright-report/**
+**/test-results
+**/test-results/**
+**/.DS_Store

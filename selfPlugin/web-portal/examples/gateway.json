@@ -1,0 +1,42 @@
+{
+  "publicOrigin": "https://harness.nextbos.cn",
+  "networkPolicyFile": "/srv/portal/gateway/network-policy.json",
+  "sessionTtlMs": 28800000,
+  "maxSessions": 1000,
+  "docker": {
+    "hostDataRoot": "/mnt/sata4-2/www/code/deepseek-harness-portal",
+    "dataRoot": "/srv/portal",
+    "image": "deepseek-harness-user:portal-v1",
+    "maxInstances": 3,
+    "memoryBytes": 2147483648,
+    "nanoCpus": 1000000000,
+    "pidsLimit": 256,
+    "activationTimeoutMs": 120000
+  },
+  "backend": {
+    "baseUrl": "https://api.nextbos.cn",
+    "loginPath": "/api/v1/auth/login",
+    "loginResponseMode": "http-status",
+    "accountField": "email",
+    "passwordField": "password",
+    "tokenPath": "token",
+    "userIdPath": "user.id",
+    "tenantIdPath": "tenant.id",
+    "expiresAtPath": "expires_at",
+    "codePath": "code",
+    "successCode": 200,
+    "unauthorizedCode": 401,
+    "forbiddenCode": 403,
+    "allowedApiPrefixes": ["/api/v1/"],
+    "maxResponseBytes": 1048576
+  },
+  "model": {
+    "baseUrl": "https://work.tokenok.net/v1",
+    "apiKeyFile": "/srv/portal/gateway/model.key",
+    "model": "gpt-5.6-sol",
+    "runtimeBaseUrl": "http://host.docker.internal:23080/portal/model/v1",
+    "maxBodyBytes": 16777216,
+    "timeoutMs": 300000,
+    "maxConcurrent": 2
+  }
+}

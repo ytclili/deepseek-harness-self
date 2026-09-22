@@ -1,0 +1,10 @@
+- insert:
+    - id: webserver
+      name: '@deepseek-ai/dsh-host-webserver'
+      config:
+        host: '0.0.0.0'
+        port: !!js Number(process.env.PORTAL_PORT || 23080)
+    - id: web-portal
+      name: dsh-web-portal
+      config:
+        configFile: !!js process.env.PORTAL_CONFIG_FILE

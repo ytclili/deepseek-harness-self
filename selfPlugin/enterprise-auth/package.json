@@ -6,6 +6,12 @@
   "description": "nextbos ERP 系统企业身份插件：IM 用户登录、加密 Token 存储与业务接口凭据注入",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./http": { "types": "./dist/http.d.ts", "default": "./dist/http.js" },
+    "./types": { "types": "./dist/types.d.ts", "default": "./dist/types.js" },
+    "./package.json": "./package.json"
+  },
   "files": ["dist", "cordis.patch.yml", "README.md", "examples"],
   "dsh": {"bundle": {"patch": "./cordis.patch.yml"}},
   "engines": {"node": "^22.19.0 || >=24.0.0"},

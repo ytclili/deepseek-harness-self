@@ -1,0 +1,32 @@
+{
+  "name": "dsh-web-portal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./user-business": { "types": "./dist/user-business.d.ts", "default": "./dist/user-business.js" },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "client/dist", "cordis.patch.yml", "README.md"],
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "scripts": {
+    "setup": "node scripts/link-harness.mjs",
+    "build:host": "node node_modules/typescript/bin/tsc -p tsconfig.json",
+    "build": "npm run build:host && npm --prefix client run build",
+    "check": "node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test tests/*.test.mjs"
+  },
+  "engines": { "node": "^22.19.0 || >=24" },
+  "peerDependencies": {
+    "dsh-enterprise-auth": "0.1.0",
+    "@deepseek-ai/dsh-tools": "0.1.6-alpha.1",
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/schemastery": "3.18.2",
+    "@deepseek-ai/dsh-host-webserver": "0.1.6-alpha.1",
+    "@deepseek-ai/dsh-client-connection": "0.1.6-alpha.1",
+    "@deepseek-ai/dsh-web-frontend": "0.1.6-alpha.1"
+  }
+}
