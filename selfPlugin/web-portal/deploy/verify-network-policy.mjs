@@ -21,11 +21,19 @@ function expectedRules(port) {
   ]
 }
 
+function normalizeNetworks(values) {
+  return values.flatMap(value => {
+    const network = typeof value === 'string' ? value : `${value.prefix?.addr}/${value.prefix?.len}`
+    return network === '224.0.0.0/3' ? ['224.0.0.0/4', '240.0.0.0/4'] : [network]
+  }).sort()
+}
+
 function normalizeExpressions(expressions) {
   return expressions?.map(expression => {
     if (!expression.match) return expression
     const clause = { ...expression.match, op: expression.match.op === 'in' ? '==' : expression.match.op }
-    if (clause.left?.payload?.field === 'daddr' && Array.isArray(clause.right?.set)) clause.right = { set: clause.right.set.map(value => typeof value === 'string' ? value : `${value.prefix?.addr}/${value.prefix?.len}`).sort() }
+    if (Array.isArray(clause.right)) clause.right = { set: [...clause.right].sort() }
+    if (clause.left?.payload?.field === 'daddr' && Array.isArray(clause.right?.set)) clause.right = { set: normalizeNetworks(clause.right.set) }
     return { match: clause }
   })
 }
@@ -40,11 +48,24 @@ export function validateFw4Policy(data, port) {
     if (base?.type !== 'filter' || base.hook !== chain) fail()
     const rules = data.nftables.filter(item => item.rule?.chain === chain && item.rule.table === 'fw4' && item.rule.family === 'inet').map(item => item.rule)
     const required = expected.filter(row => row[0] === chain)
+    const start = rules.findIndex(rule => rule.comment === `portal:fw4:${chain}:${required[0][1]}`)
+    if (start < 0) fail()
+    const unconditionalBypass = rules.slice(0, start).some(rule => {
+      const expressions = rule.expr ?? []
+      const hasMatch = expressions.some(expression => expression.match)
+      const hasBypassVerdict = expressions.some(expression => Object.hasOwn(expression, 'accept') || expression.jump || expression.goto)
+      return hasBypassVerdict && !hasMatch
+    })
+    if (unconditionalBypass) fail()
+    const baseComment = chain === 'input' ? '!fw4: Handle inbound flows' : '!fw4: Handle forwarded flows'
+    const baseIndex = rules.findIndex(rule => rule.comment === baseComment)
+    if (baseIndex >= 0 && start + required.length > baseIndex) fail()
     for (let index = 0; index < required.length; index++) {
       const [, suffix, expressions] = required[index]
       const wanted = structuredClone(expressions)
       if (suffix === 'private') wanted[1].match.right = { set: [...deniedNetworks].sort() }
-      if (rules[index]?.comment !== `portal:fw4:${chain}:${suffix}` || !isDeepStrictEqual(normalizeExpressions(rules[index].expr), wanted)) fail()
+      const rule = rules[start + index]
+      if (rule?.comment !== `portal:fw4:${chain}:${suffix}` || !isDeepStrictEqual(normalizeExpressions(rule.expr), wanted)) fail()
     }
   }
 }
@@ -60,7 +81,7 @@ export function validateNetworkPolicy(data, port) {
   if (chains.length !== 2 || chains.some(chain => !['input', 'forward'].includes(chain.name) || chain.hook !== chain.name || chain.prio !== -20 || chain.type !== 'filter' || chain.policy !== 'accept')) fail()
   const sets = items.filter(item => item.set).map(item => item.set)
   if (sets.length !== 1 || sets[0].name !== 'private_v4' || sets[0].type !== 'ipv4_addr') fail()
-  const networks = sets[0].elem?.map(item => typeof item === 'string' ? item : `${item.prefix?.addr}/${item.prefix?.len}`).sort()
+  const networks = sets[0].elem && normalizeNetworks(sets[0].elem)
   if (!isDeepStrictEqual(networks, [...deniedNetworks].sort())) fail()
   const expected = expectedRules(port)
   const rules = items.filter(item => item.rule).map(item => item.rule)

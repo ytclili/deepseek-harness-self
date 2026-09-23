@@ -57,4 +57,4 @@ npm --prefix selfPlugin/web-portal test
 
 测试使用临时目录、端口和测试凭据，覆盖登录拒绝、后端身份选实例、跨租户隔离、退出与过期、流和 WebSocket 撤销、凭据刷新并发、模型代理与 Docker 请求约束。正式 CLI profile 测试启动两个真实 Harness 实例，验证模型加载、会话列表分离和原生 Cookie 不能跨用；独立网关测试通过真实 HTTP 登录适配器拒绝错误密码。测试不调用真实 ERP 或模型，也不创建业务订单。
 
-Docker API fixture、部署脚本测试与本机 CLI 验证不等于 Linux 容器隔离验收。服务器启用前仍需执行部署脚本中的实际 nft 检查和网络探测；公网域名切换单独执行。独立持久化关系由目录、Docker 配置及 HTTP 行为验证，本插件不发布空的 runtime invariant。
+Docker API fixture、部署脚本测试与本机 CLI 验证不等于 Linux 容器隔离验收。服务器启用前仍需执行部署脚本中的实际 nft 检查和网络探测；实时检查严格验证优先级为 -20 的独立隔离表，并接受 nft 对集合和条件表达式的等价规范化。公网域名切换单独执行。独立持久化关系由目录、Docker 配置及 HTTP 行为验证，本插件不发布空的 runtime invariant。
