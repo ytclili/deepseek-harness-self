@@ -39,7 +39,7 @@ function allowed(source, path, prepare = false) {
   if (!prepare && !parts.includes('node_modules') && parts.some(part => ['tests', '__tests__', 'snapshots', 'docs'].includes(part))) return false
   const [root, plugin, child] = parts
   if (root === 'selfPlugin') return parts.length === 1 || (plugins.has(plugin) && !['runtime', 'data', 'control', 'backup', 'logs', '.cache'].includes(child))
-  if (prepare && ['scripts', 'benchmarks', 'website'].includes(root)) return true
+  if (prepare && ['scripts', 'benchmarks', 'website', 'snapshots'].includes(root)) return true
   return roots.has(root) || (parts.length === 1 && rootFiles.has(basename(path)))
 }
 

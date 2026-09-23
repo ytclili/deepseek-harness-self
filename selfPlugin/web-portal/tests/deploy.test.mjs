@@ -51,6 +51,8 @@ test('missing compiled CLI is rejected before an image context is created', asyn
 
 test('deployment shell scripts parse as POSIX sh and separate gateway data/socket from user image', async () => {
   for (const script of ['prepare-runtime.sh', 'build-images.sh', 'install-network-policy.sh', 'verify-network-policy.sh', 'portal-service.sh', 'istoreos.init']) execFileSync('sh', ['-n', new URL(`../deploy/${script}`, import.meta.url).pathname])
+  const preparation = await readFile(new URL('../deploy/prepare-runtime.sh', import.meta.url), 'utf8')
+  assert.match(preparation, /export CI=true/)
   const dockerfile = await readFile(new URL('../deploy/user.Dockerfile', import.meta.url), 'utf8')
   assert.match(dockerfile, /COPY payload\/ \/app\//)
   assert.doesNotMatch(dockerfile, /COPY \. /)
@@ -85,11 +87,16 @@ test('preparation context preserves test/build sources and works before portal a
   await rm(join(source, 'selfPlugin/web-portal/dist'), { recursive: true })
   await mkdir(join(source, 'scripts'), { recursive: true })
   await writeFile(join(source, 'scripts/build.ts'), 'build source')
+  await mkdir(join(source, 'snapshots/acp/example'), { recursive: true })
+  await writeFile(join(source, 'snapshots/acp/example/cordis.yml'), 'snapshot fixture')
+  await mkdir(join(source, 'apps/cli/tests/profiles/acp'), { recursive: true })
+  await symlink('../../../../../snapshots/acp/example/cordis.yml', join(source, 'apps/cli/tests/profiles/acp/cordis.yml'))
   await mkdir(join(source, 'selfPlugin/web-portal/tests'), { recursive: true })
   await writeFile(join(source, 'selfPlugin/web-portal/tests/sample.test.mjs'), 'test source')
   const target = join(root, 'prepare')
   await createBuildContext(source, target, { prepare: true })
   assert.equal(await readFile(join(target, 'payload/scripts/build.ts'), 'utf8'), 'build source')
+  assert.equal(await readFile(join(target, 'payload/apps/cli/tests/profiles/acp/cordis.yml'), 'utf8'), 'snapshot fixture')
   assert.equal(await readFile(join(target, 'payload/selfPlugin/web-portal/tests/sample.test.mjs'), 'utf8'), 'test source')
 })
 

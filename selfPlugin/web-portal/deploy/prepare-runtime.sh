@@ -5,7 +5,7 @@ umask 077
 if [ "${1:-}" = --inside ]; then
   cd /app
   export LEFTHOOK=0
-  export CI=1
+  export CI=true
   export NODE_USE_ENV_PROXY=1
   export http_proxy=${http_proxy:-${HTTP_PROXY:-}}
   export https_proxy=${https_proxy:-${HTTPS_PROXY:-}}
