@@ -21,6 +21,7 @@ test('gateway uses built dsh profile with only explicit proxy environment and di
   assert.equal(call[2].env.HTTPS_PROXY, 'http://127.0.0.1:8080')
   assert.equal(call[2].env.NO_PROXY, 'localhost,127.0.0.1')
   assert.equal(call[2].env.NODE_USE_ENV_PROXY, '1')
+  assert.equal(call[2].env.NARB_DISABLE_NATIVE_CACHE, '1')
   assert.equal(call[2].env.PRIVATE_KEY, undefined)
   assert.equal(call[2].env.NODE_OPTIONS, undefined)
   assert.equal(call[2].env.PORTAL_CONFIG_FILE, join(root, 'config.json'))

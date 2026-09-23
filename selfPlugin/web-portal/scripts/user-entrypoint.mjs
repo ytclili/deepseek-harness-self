@@ -128,7 +128,7 @@ export async function runUserEntrypoint({ home = defaults.home, control = defaul
   const child = spawnProcess(process.execPath, [join(appRoot, 'apps/cli/lib/bin.js'), 'web', '--patch', join(control, 'user.patch.json'), '--port', '3080', '--no-open'], {
     cwd: '/workspace', stdio: 'inherit', env: {
       HOME: '/home/node', DSH_HOME: home, PORTAL_MODEL_KEY: modelKey, NODE_ENV: 'production', DSH_TELEMETRY_DISABLED: '1',
-      PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', LANG: 'C.UTF-8',
+      PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', LANG: 'C.UTF-8', NARB_DISABLE_NATIVE_CACHE: '1',
     },
   })
   const term = () => child.kill('SIGTERM')

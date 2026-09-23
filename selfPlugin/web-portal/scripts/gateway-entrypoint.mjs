@@ -28,7 +28,7 @@ export async function runGatewayEntrypoint({ root = '/srv/portal/gateway', appRo
     cwd: root, stdio: 'inherit', env: {
       HOME: root, DSH_HOME: home, NODE_ENV: 'production', DSH_TELEMETRY_DISABLED: '1',
       PORTAL_PORT: environment.PORTAL_PORT ?? '23080', PORTAL_CONFIG_FILE: join(root, 'config.json'),
-      PATH: '/usr/local/bin:/usr/bin:/bin', LANG: 'C.UTF-8', NODE_USE_ENV_PROXY: '1', ...proxy,
+      PATH: '/usr/local/bin:/usr/bin:/bin', LANG: 'C.UTF-8', NODE_USE_ENV_PROXY: '1', NARB_DISABLE_NATIVE_CACHE: '1', ...proxy,
     },
   })
   const term = () => child.kill('SIGTERM')
