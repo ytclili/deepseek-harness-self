@@ -25,13 +25,14 @@ export async function readGatewayConfig(path: string): Promise<GatewayConfig> {
   const raw = await readFile(path)
   if (raw.length > 65_536) throw new Error('Portal config too large')
   const input = JSON.parse(raw.toString('utf8')) as Partial<GatewayConfig>
+  const activationTimeoutMs = input.docker?.activationTimeoutMs ?? 120_000
   const config: GatewayConfig = {
     sessionTtlMs: 28_800_000, maxSessions: 1000, proxyTimeoutMs: 600_000,
     maxProxyBodyBytes: 67_108_864, businessTimeoutMs: 10_000, goodsMaxItems: 100,
     ...input,
     publicOrigin: input.publicOrigin ?? '', networkPolicyFile: input.networkPolicyFile ?? '',
     backend: input.backend!,
-    docker: { maxInstances: 3, memoryBytes: 2_147_483_648, nanoCpus: 1_000_000_000, pidsLimit: 256, activationTimeoutMs: 120_000, ...input.docker } as DockerRuntimeConfig,
+    docker: { maxInstances: 3, memoryBytes: 2_147_483_648, nanoCpus: 1_000_000_000, pidsLimit: 256, activationTimeoutMs, requestTimeoutMs: activationTimeoutMs, ...input.docker } as DockerRuntimeConfig,
     model: { maxBodyBytes: 16_777_216, timeoutMs: 300_000, maxConcurrent: 2, ...input.model, sessionTtlMs: input.sessionTtlMs ?? 28_800_000 } as ModelProxyConfig,
   }
   const origin = new URL(config.publicOrigin)

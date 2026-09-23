@@ -11,7 +11,8 @@
     "memoryBytes": 2147483648,
     "nanoCpus": 1000000000,
     "pidsLimit": 256,
-    "activationTimeoutMs": 120000
+    "activationTimeoutMs": 600000,
+    "requestTimeoutMs": 300000
   },
   "backend": {
     "baseUrl": "https://api.nextbos.cn",

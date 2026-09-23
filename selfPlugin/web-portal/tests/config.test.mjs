@@ -22,6 +22,10 @@ test('business limits accept both supported endpoints and retain defaults', asyn
   const defaults = await read({})
   assert.equal(defaults.businessTimeoutMs, 10_000)
   assert.equal(defaults.goodsMaxItems, 100)
+  assert.equal(defaults.docker.requestTimeoutMs, defaults.docker.activationTimeoutMs)
+  const slowStorage = await read({ docker: { activationTimeoutMs: 600_000, requestTimeoutMs: 300_000 } })
+  assert.equal(slowStorage.docker.activationTimeoutMs, 600_000)
+  assert.equal(slowStorage.docker.requestTimeoutMs, 300_000)
   for (const [businessTimeoutMs, goodsMaxItems] of [[1, 1], [60_000, 100]]) {
     const config = await read({ businessTimeoutMs, goodsMaxItems })
     assert.equal(config.businessTimeoutMs, businessTimeoutMs)

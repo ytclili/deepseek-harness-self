@@ -3,7 +3,7 @@ FROM ${BASE_IMAGE}
 
 # Build from the Harness root on the Linux host, preserving its offline workspace dependencies.
 COPY payload/ /app/
-RUN mkdir -p /home/node/.dsh /workspace && chown -R 1000:1000 /home/node /workspace
+RUN chmod -R a+rX /app && mkdir -p /home/node/.dsh /workspace && chown -R 1000:1000 /home/node /workspace
 ENV HOME=/home/node DSH_HOME=/home/node/.dsh NODE_ENV=production
 WORKDIR /workspace
 USER 1000:1000

@@ -26,6 +26,7 @@ export interface DockerRuntimeConfig {
   nanoCpus: number
   pidsLimit: number
   activationTimeoutMs: number
+  requestTimeoutMs: number
   socketPath?: string
   containerPrefix?: string
 }
@@ -110,11 +111,11 @@ export class DockerRuntimeManager implements RuntimeManager {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,50}$/.test(this.prefix)) throw new Error('Invalid runtime prefix')
     if (![config.hostDataRoot, config.dataRoot].every(path => isAbsolute(path) && !/[\r\n:,]/.test(path))) throw new Error('Invalid runtime data root')
     if (!config.image || /[\r\n]/.test(config.image)) throw new Error('Invalid runtime image')
-    for (const value of [config.maxInstances, config.memoryBytes, config.nanoCpus, config.pidsLimit, config.activationTimeoutMs]) {
+    for (const value of [config.maxInstances, config.memoryBytes, config.nanoCpus, config.pidsLimit, config.activationTimeoutMs, config.requestTimeoutMs]) {
       if (!Number.isSafeInteger(value) || value <= 0) throw new Error('Invalid runtime resource limit')
     }
     this.owner = createHash('sha256').update(JSON.stringify([this.prefix, resolve(config.hostDataRoot)])).digest('hex')
-    this.docker = dependencies.docker ?? new DockerClient(config.socketPath)
+    this.docker = dependencies.docker ?? new DockerClient(config.socketPath, config.requestTimeoutMs)
   }
 
   async ensure(identity: LoginIdentity, signal: AbortSignal): Promise<UserRuntime> {

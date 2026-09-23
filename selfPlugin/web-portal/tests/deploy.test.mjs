@@ -55,6 +55,7 @@ test('deployment shell scripts parse as POSIX sh and separate gateway data/socke
   assert.match(preparation, /export CI=true/)
   const dockerfile = await readFile(new URL('../deploy/user.Dockerfile', import.meta.url), 'utf8')
   assert.match(dockerfile, /COPY payload\/ \/app\//)
+  assert.match(dockerfile, /chmod -R a\+rX \/app/)
   assert.doesNotMatch(dockerfile, /COPY \. /)
   const config = JSON.parse(await readFile(new URL('../examples/gateway.json', import.meta.url), 'utf8'))
   assert.equal(config.docker.hostDataRoot, '/mnt/sata4-2/www/code/deepseek-harness-runtime/portal')

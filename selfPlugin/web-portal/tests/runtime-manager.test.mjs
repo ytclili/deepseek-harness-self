@@ -10,7 +10,7 @@ import { DockerClient } from '../dist/docker-client.js'
 
 const identity = (userId = 'a', token = 'fake-business-secret') => ({ tenantId: 'tenant', userId, token, expiresAt: null })
 const key = id => createHash('sha256').update(JSON.stringify([id.tenantId, id.userId])).digest('hex')
-const config = { hostDataRoot: '/mnt/sata4-2/portal', dataRoot: '/gateway/data', image: 'test-image', maxInstances: 2, memoryBytes: 512 * 1024 ** 2, nanoCpus: 1e9, pidsLimit: 64, activationTimeoutMs: 200, containerPrefix: 'portal-test' }
+const config = { hostDataRoot: '/mnt/sata4-2/portal', dataRoot: '/gateway/data', image: 'test-image', maxInstances: 2, memoryBytes: 512 * 1024 ** 2, nanoCpus: 1e9, pidsLimit: 64, activationTimeoutMs: 200, requestTimeoutMs: 200, containerPrefix: 'portal-test' }
 
 class FakeDocker {
   calls = []

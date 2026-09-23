@@ -33,7 +33,7 @@
 
 - `backend`：复用企业登录适配器字段，示例将账号映射为 `email`，从返回值读取 `token`、`user.id`、`tenant.id` 和 `expires_at`。根据真实接口核对；不会把任意非空账号密码视为成功。
 - `publicOrigin`：浏览器实际访问的完整 origin。示例为回环验证地址；公网反向代理切换时设置 `https://harness.nextbos.cn` 并保留 Host、Origin 和 WebSocket 转发。
-- `docker`：镜像、宿主机数据目录及网关容器内挂载路径；限制实例数量、CPU、内存、PID 和启动时限。
+- `docker`：镜像、宿主机数据目录及网关容器内挂载路径；限制实例数量、CPU、内存、PID、总启动时限和单次 Docker 请求时限。iStoreOS 使用 `vfs` 存储驱动时，容器创建可能超过两分钟，应相应提高 `activationTimeoutMs` 和 `requestTimeoutMs`。
 - `model`：上游模型地址、模型名及仅网关可读的密钥文件。用户侧地址固定指向网关模型路由。
 - `networkPolicyFile`：宿主机实际安装规则并通过检查后生成的标记；缺失或不匹配时拒绝启动。
 - `businessTimeoutMs` / `goodsMaxItems`：业务工具超时不超过 60000 毫秒，每次商品查询上限不超过 100。
