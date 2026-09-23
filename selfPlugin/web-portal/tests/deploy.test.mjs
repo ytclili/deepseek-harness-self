@@ -63,6 +63,16 @@ test('deployment shell scripts parse as POSIX sh and separate gateway data/socke
   assert.equal(new URL(config.model.runtimeBaseUrl).port, '23080')
 })
 
+test('Linux preparation installs and patches the reviewed IM package before plugin tests', async () => {
+  const preparation = await readFile(new URL('../deploy/prepare-runtime.sh', import.meta.url), 'utf8')
+  const install = preparation.indexOf('pnpm dsh plugin --profile web add @xmanrui/dsh-im@4.21.2 --ignore-scripts')
+  const patch = preparation.indexOf('node selfPlugin/enterprise-auth/scripts/patch-dsh-im.mjs')
+  const tests = preparation.indexOf('for plugin in enterprise-auth enterprise-tools web-portal')
+  assert(install >= 0, 'reviewed IM package must be installed in the disposable profile')
+  assert(patch > install, 'IM patch must run after package installation')
+  assert(tests > patch, 'plugin tests must run against the patched IM package')
+})
+
 test('workspace links are relocated to /app, desktop links retained, build-only pnpm roots omitted', async t => {
   const { root, source } = await fixture(t)
   await mkdir(join(source, 'apps/desktop'), { recursive: true })

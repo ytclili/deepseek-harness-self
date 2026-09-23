@@ -17,6 +17,11 @@ if [ "${1:-}" = --inside ]; then
   git config --global --add safe.directory /app
   pnpm install --frozen-lockfile --store-dir /cache/pnpm
   pnpm run build
+  pnpm dsh plugin --profile web add @xmanrui/dsh-im@4.21.2 --ignore-scripts
+  npm install --prefix /tmp/dsh-im-build-deps --ignore-scripts --no-audit --no-fund \
+    esbuild@0.25.9 @larksuiteoapi/node-sdk@1.73.0 @whiskeysockets/baileys@7.0.0-rc14 semver@7.8.5 react@18.3.1
+  node selfPlugin/enterprise-auth/scripts/patch-dsh-im.mjs "$HOME/.dsh/profiles/web/node_modules/@xmanrui/dsh-im" /tmp/dsh-im-build-deps/node_modules
+  node selfPlugin/enterprise-auth/scripts/patch-dsh-im.mjs "$HOME/.dsh/profiles/web/node_modules/@xmanrui/dsh-im" --check
   for plugin in enterprise-auth enterprise-tools web-portal; do
     node "selfPlugin/$plugin/scripts/link-harness.mjs" /app
     if [ "$plugin" = web-portal ]; then npm --prefix selfPlugin/web-portal/client ci --cache /cache/npm --no-audit --no-fund; fi
