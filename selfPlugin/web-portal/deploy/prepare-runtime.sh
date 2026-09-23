@@ -16,6 +16,7 @@ if [ "${1:-}" = --inside ]; then
   fi
   git config --global --add safe.directory /app
   pnpm install --frozen-lockfile --store-dir /cache/pnpm
+  pnpm run clean
   pnpm run build
   pnpm dsh plugin --profile web add @xmanrui/dsh-im@4.21.2 --ignore-scripts
   npm install --prefix /tmp/dsh-im-build-deps --ignore-scripts --no-audit --no-fund \

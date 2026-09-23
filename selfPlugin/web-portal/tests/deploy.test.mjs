@@ -65,9 +65,14 @@ test('deployment shell scripts parse as POSIX sh and separate gateway data/socke
 
 test('Linux preparation installs and patches the reviewed IM package before plugin tests', async () => {
   const preparation = await readFile(new URL('../deploy/prepare-runtime.sh', import.meta.url), 'utf8')
+  const workspaceInstall = preparation.indexOf('pnpm install --frozen-lockfile --store-dir /cache/pnpm')
+  const clean = preparation.indexOf('pnpm run clean')
+  const build = preparation.indexOf('pnpm run build')
   const install = preparation.indexOf('pnpm dsh plugin --profile web add @xmanrui/dsh-im@4.21.2 --ignore-scripts')
   const patch = preparation.indexOf('node selfPlugin/enterprise-auth/scripts/patch-dsh-im.mjs')
   const tests = preparation.indexOf('for plugin in enterprise-auth enterprise-tools web-portal')
+  assert(clean > workspaceInstall, 'copied build artifacts must be cleaned after dependencies are installed')
+  assert(build > clean, 'Harness must build from the cleaned disposable source copy')
   assert(install >= 0, 'reviewed IM package must be installed in the disposable profile')
   assert(patch > install, 'IM patch must run after package installation')
   assert(tests > patch, 'plugin tests must run against the patched IM package')
