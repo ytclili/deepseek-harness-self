@@ -4,7 +4,8 @@ set -eu
 umask 077
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 runtime=${PORTAL_RUNTIME_ROOT:-/mnt/sata4-2/www/code/deepseek-harness-runtime/portal}
-image=${PORTAL_IMAGE:-deepseek-harness-portal:0.1.7}
+gateway_image=${PORTAL_GATEWAY_IMAGE:-${PORTAL_IMAGE:-crpi-hr2qiw4orf9zv9b5.cn-hangzhou.personal.cr.aliyuncs.com/nextbos/deepseek-harness-portal:0.1.7}}
+runtime_image=${PORTAL_RUNTIME_IMAGE:-crpi-hr2qiw4orf9zv9b5.cn-hangzhou.personal.cr.aliyuncs.com/nextbos/deepseek-harness-runtime:0.1.7}
 container=deepseek-harness-portal-gateway
 label=io.dsh.portal.gateway
 port=23080
@@ -32,19 +33,19 @@ start_gateway() {
   [ -f "$runtime/gateway/config.json" ] && [ -s "$runtime/gateway/model.key" ] || { echo 'Create private gateway/config.json and gateway/model.key first; existing files are never overwritten.' >&2; exit 1; }
   [ ! -L "$runtime/gateway/config.json" ] && [ ! -L "$runtime/gateway/model.key" ] || exit 1
   chmod 600 "$runtime/gateway/config.json" "$runtime/gateway/model.key"
-  docker image inspect "$image" >/dev/null
+  docker image inspect "$gateway_image" >/dev/null
   # Validate fixed mount/port settings before stopping anything or installing rules.
   docker run --rm --network none --user 0:0 --read-only --entrypoint node \
-    --mount "type=bind,src=$runtime/gateway/config.json,dst=/config.json,readonly" "$image" --input-type=module -e '
+    --mount "type=bind,src=$runtime/gateway/config.json,dst=/config.json,readonly" "$gateway_image" --input-type=module -e '
 import {readFileSync} from "node:fs";const c=JSON.parse(readFileSync("/config.json","utf8"));
 if(c.docker.hostDataRoot!==process.argv[1]||c.docker.dataRoot!=="/srv/portal"||c.docker.image!==process.argv[2]||c.model.runtimeBaseUrl!=="http://host.docker.internal:23080/portal/model/v1"||c.model.apiKeyFile!=="/srv/portal/gateway/model.key"||c.networkPolicyFile!=="/run/dsh-portal/network-policy.json")throw Error("Deployment paths, policy, image or port mismatch");
-' "$runtime" "$image"
+' "$runtime" "$runtime_image"
   set --
   proxy_file=${PORTAL_PROXY_ENV_FILE:-/mnt/sata4-2/www/code/deepseek-harness-runtime/deploy/proxy.env}
   if [ -f "$proxy_file" ]; then
     [ ! -L "$proxy_file" ] || exit 1
     docker run --rm --network none --user 0:0 --read-only --entrypoint node \
-      --mount "type=bind,src=$proxy_file,dst=/proxy.env,readonly" "$image" --input-type=module -e '
+      --mount "type=bind,src=$proxy_file,dst=/proxy.env,readonly" "$gateway_image" --input-type=module -e '
 import {readFileSync} from "node:fs";const value=readFileSync("/proxy.env","utf8");
 if(value.length>65536)throw Error("Proxy settings too large");
 for(const line of value.split(/\r?\n/)){if(!line||line.startsWith("#"))continue;if(!/^(HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|http_proxy|https_proxy|all_proxy|no_proxy)=[^\r\n\0]*$/.test(line))throw Error("Unexpected proxy environment field");}
@@ -52,7 +53,7 @@ for(const line of value.split(/\r?\n/)){if(!line||line.startsWith("#"))continue;
     set -- --env-file "$proxy_file"
   fi
   stop_gateway
-  sh "$script_dir/install-network-policy.sh" install "$port" "$image"
+  sh "$script_dir/install-network-policy.sh" install "$port" "$gateway_image"
   docker run -d --name "$container" --label "$label=web-portal" --restart no \
     --network host --user 0:0 --read-only --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER \
     --security-opt no-new-privileges:true --memory 1g --cpus 1 --pids-limit 256 \
@@ -60,7 +61,7 @@ for(const line of value.split(/\r?\n/)){if(!line||line.startsWith("#"))continue;
     --mount "type=bind,src=$runtime,dst=/srv/portal" \
     --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
     --mount type=bind,src=/run/dsh-portal,dst=/run/dsh-portal,readonly \
-    --env PORTAL_PORT=23080 "$@" --entrypoint node "$image" /app/selfPlugin/web-portal/scripts/gateway-entrypoint.mjs >/dev/null
+    --env PORTAL_PORT=23080 "$@" --entrypoint node "$gateway_image" /app/selfPlugin/web-portal/scripts/gateway-entrypoint.mjs >/dev/null
   ready=0
   while [ "$ready" -lt 60 ]; do
     if docker exec "$container" node -e 'const c=JSON.parse(require("node:fs").readFileSync("/srv/portal/gateway/config.json","utf8"));const req=require("node:http").get({host:"127.0.0.1",port:23080,path:"/login",headers:{host:new URL(c.publicOrigin).host}},res=>{res.resume();process.exit(res.statusCode===200?0:1)});req.on("error",()=>process.exit(1));req.setTimeout(1000,()=>{req.destroy();process.exit(1)})' >/dev/null 2>&1; then break; fi

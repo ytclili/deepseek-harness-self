@@ -3,11 +3,11 @@ import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { lstat, mkdir, open, rename, symlink, unlink } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const defaults = { home: '/home/node/.dsh', control: '/run/portal', appRoot: '/app' }
-const bundles = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']
+const bundles = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@xmanrui/dsh-im']
 
 function invalid() { throw new Error('Invalid user runtime configuration') }
 function object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value) }
@@ -82,6 +82,7 @@ async function writePrivate(path, value) {
 }
 
 async function localLink(path, target) {
+  await directory(dirname(path))
   let stat
   try { stat = await lstat(path) } catch (error) { if (error.code !== 'ENOENT') throw error }
   if (stat) {
@@ -107,7 +108,11 @@ export async function prepareUserHome({ home, control, appRoot } = defaults) {
   // over the private deployment settings. Preserve the old bytes for recovery.
   try { await rename(join(home, 'settings.yaml'), join(home, `settings.yaml.portal-backup-${randomUUID()}`)) }
   catch (error) { if (error.code !== 'ENOENT') throw error }
-  const dependencies = { 'dsh-web-portal': `link:${appRoot}/selfPlugin/web-portal`, 'dsh-enterprise-tools': `link:${appRoot}/selfPlugin/enterprise-tools` }
+  const dependencies = {
+    'dsh-web-portal': `link:${appRoot}/selfPlugin/web-portal`,
+    'dsh-enterprise-tools': `link:${appRoot}/selfPlugin/enterprise-tools`,
+    '@xmanrui/dsh-im': `link:${appRoot}/selfPlugin/web-portal/im-runtime/node_modules/@xmanrui/dsh-im`,
+  }
   // Harness 0.1.7 reads entry configuration from profile patches. Do not
   // recreate settings.yaml and trigger the one-time legacy importer on restart.
   const configPatch = [

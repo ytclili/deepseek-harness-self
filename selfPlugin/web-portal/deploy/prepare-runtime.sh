@@ -14,15 +14,17 @@ if [ "${1:-}" = --inside ]; then
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential python3 pkg-config ca-certificates git
   fi
+  command -v pnpm >/dev/null || npm install -g pnpm@11.7.0
   git config --global --add safe.directory /app
   pnpm install --frozen-lockfile --store-dir /cache/pnpm
   pnpm run clean
   pnpm run build
-  pnpm dsh plugin --profile web add @xmanrui/dsh-im@4.21.2 --ignore-scripts
+  npm install --prefix selfPlugin/web-portal/im-runtime --package-lock=false --legacy-peer-deps --ignore-scripts --no-audit --no-fund @xmanrui/dsh-im@4.21.2
   npm install --prefix /tmp/dsh-im-build-deps --ignore-scripts --no-audit --no-fund \
     esbuild@0.25.9 @larksuiteoapi/node-sdk@1.73.0 @whiskeysockets/baileys@7.0.0-rc14 semver@7.8.5 react@18.3.1
-  node selfPlugin/enterprise-auth/scripts/patch-dsh-im.mjs "$HOME/.dsh/profiles/web/node_modules/@xmanrui/dsh-im" /tmp/dsh-im-build-deps/node_modules
-  node selfPlugin/enterprise-auth/scripts/patch-dsh-im.mjs "$HOME/.dsh/profiles/web/node_modules/@xmanrui/dsh-im" --check
+  node selfPlugin/enterprise-auth/scripts/patch-dsh-im.mjs "selfPlugin/web-portal/im-runtime/node_modules/@xmanrui/dsh-im" /tmp/dsh-im-build-deps/node_modules
+  node selfPlugin/enterprise-auth/scripts/patch-dsh-im.mjs "selfPlugin/web-portal/im-runtime/node_modules/@xmanrui/dsh-im" --check
+  export DSH_IM_SOURCE=/app/selfPlugin/web-portal/im-runtime/node_modules/@xmanrui/dsh-im
   for plugin in enterprise-auth enterprise-tools web-portal; do
     node "selfPlugin/$plugin/scripts/link-harness.mjs" /app
     if [ "$plugin" = web-portal ]; then npm --prefix selfPlugin/web-portal/client ci --cache /cache/npm --no-audit --no-fund; fi
@@ -31,30 +33,31 @@ if [ "${1:-}" = --inside ]; then
   done
   exit 0
 fi
-[ "$(uname -s)" = Linux ] || exit 1
+case "$(uname -s)" in Linux|Darwin) ;; *) exit 1;; esac
 source=${1:-/mnt/sata4-2/www/code/deepseek-harness-self}
 [ -d "$source/.git" ] && [ ! -L "$source/.git" ] || { echo 'A checkout with a real .git directory is required for the plugin compatibility gate' >&2; exit 1; }
 runtime=${PORTAL_RUNTIME_ROOT:-/mnt/sata4-2/www/code/deepseek-harness-runtime/portal}
 base=${PORTAL_BASE_IMAGE:-deepseek-harness-runtime:node24}
+platform=${PORTAL_PLATFORM:-linux/amd64}
 target=${2:?A new preparation directory is required}
 case "$target" in "$runtime"/build/prepared-*) ;; *) echo 'Preparation target must be a new portal/build/prepared-* directory' >&2; exit 2;; esac
 mkdir -p "$runtime/build/cache"
 name=${target##*/}
-docker run --rm --network none --user 0:0 --entrypoint node \
+docker run --rm --platform "$platform" --network none --user 0:0 --entrypoint node \
   --mount "type=bind,src=$source,dst=/app,readonly" --mount "type=bind,src=$runtime/build,dst=/build" \
   "$base" /app/selfPlugin/web-portal/deploy/create-build-context.mjs /app "/build/$name" --prepare --host-source "$source"
 set --
 proxy_file=${PORTAL_PROXY_ENV_FILE:-/mnt/sata4-2/www/code/deepseek-harness-runtime/deploy/proxy.env}
 if [ -f "$proxy_file" ]; then
   [ ! -L "$proxy_file" ] || exit 1
-  docker run --rm --network none --user 0:0 --read-only --entrypoint node \
+  docker run --rm --platform "$platform" --network none --user 0:0 --read-only --entrypoint node \
     --mount "type=bind,src=$proxy_file,dst=/proxy.env,readonly" "$base" --input-type=module -e '
 import {readFileSync} from "node:fs";const text=readFileSync("/proxy.env","utf8");if(text.length>65536)throw Error("Proxy settings too large");for(const line of text.split(/\r?\n/)){if(!line||line.startsWith("#"))continue;if(!/^(HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|http_proxy|https_proxy|all_proxy|no_proxy)=[^\r\n\0]*$/.test(line))throw Error("Unexpected proxy environment field");}
 '
   set -- --env-file "$proxy_file"
 fi
 # Host networking reuses a host-loopback proxy. Only this trusted build phase receives proxy variables.
-docker run --rm --network host --user 0:0 --entrypoint sh "$@" \
+docker run --rm --platform "$platform" --network host --user 0:0 --entrypoint sh "$@" \
   --mount "type=bind,src=$target/payload,dst=/app" --mount "type=bind,src=$runtime/build/cache,dst=/cache" \
   --mount "type=bind,src=$source/.git,dst=/app/.git,readonly" \
   "$base" /app/selfPlugin/web-portal/deploy/prepare-runtime.sh --inside

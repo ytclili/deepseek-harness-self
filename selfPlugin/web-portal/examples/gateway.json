@@ -6,7 +6,7 @@
   "docker": {
     "hostDataRoot": "/mnt/sata4-2/www/code/deepseek-harness-runtime/portal",
     "dataRoot": "/srv/portal",
-    "image": "deepseek-harness-portal:0.1.7",
+    "image": "crpi-hr2qiw4orf9zv9b5.cn-hangzhou.personal.cr.aliyuncs.com/nextbos/deepseek-harness-runtime:0.1.7",
     "maxInstances": 3,
     "memoryBytes": 2147483648,
     "nanoCpus": 1000000000,

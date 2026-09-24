@@ -14,6 +14,7 @@ async function fixture(t) {
     'package.json': '{}', 'apps/cli/package.json': '{"version":"0.1.7-alpha.1"}', 'apps/cli/lib/bin.js': '', 'apps/web/dist/index.html': '',
     'node_modules/tsx/package.json': '{}', 'node_modules/pkg/lib/index.js': 'linux-build', 'packages/core/runtime/lib/index.js': 'runtime-code',
     'selfPlugin/web-portal/dist/index.js': '', 'selfPlugin/web-portal/client/dist/index.html': '', 'selfPlugin/enterprise-auth/dist/http.js': '', 'selfPlugin/enterprise-tools/dist/index.js': '',
+    'selfPlugin/web-portal/im-runtime/node_modules/@xmanrui/dsh-im/package.json': '{"name":"@xmanrui/dsh-im"}',
     'selfPlugin/web-portal/deploy/user.Dockerfile': 'COPY payload/ /app/', 'selfPlugin/web-portal/deploy/user.Dockerfile.dockerignore': '*\n!payload/**\n',
     '.env': 'canary', '.git/config': 'canary', 'apps/web/.env.production': 'canary', 'selfPlugin/web-portal/runtime/key': 'canary',
     'selfPlugin/web-portal/backups/key': 'canary', 'selfPlugin/other/dist/index.js': 'canary', 'selfPlugin/web-portal/.credentials.yaml': 'canary',
@@ -26,8 +27,8 @@ test('build context admits Linux runtime artifacts and three plugins, excludes p
   const { root, source, files } = await fixture(t)
   const target = join(root, 'context')
   await createBuildContext(source, target)
-  for (const path of Object.keys(files).slice(0, 13)) assert((await lstat(join(target, 'payload', path))).isFile(), path)
-  for (const path of Object.keys(files).slice(13)) await assert.rejects(lstat(join(target, 'payload', path)), { code: 'ENOENT' })
+  for (const path of Object.keys(files).slice(0, 14)) assert((await lstat(join(target, 'payload', path))).isFile(), path)
+  for (const path of Object.keys(files).slice(14)) await assert.rejects(lstat(join(target, 'payload', path)), { code: 'ENOENT' })
   assert.equal(await readFile(join(target, 'payload/node_modules/pkg/lib/index.js'), 'utf8'), 'linux-build')
   await assert.rejects(createBuildContext(source, target), /EEXIST|exists/)
 })
@@ -68,14 +69,24 @@ test('Linux preparation installs and patches the reviewed IM package before plug
   const workspaceInstall = preparation.indexOf('pnpm install --frozen-lockfile --store-dir /cache/pnpm')
   const clean = preparation.indexOf('pnpm run clean')
   const build = preparation.indexOf('pnpm run build')
-  const install = preparation.indexOf('pnpm dsh plugin --profile web add @xmanrui/dsh-im@4.21.2 --ignore-scripts')
+  const install = preparation.indexOf('npm install --prefix selfPlugin/web-portal/im-runtime')
   const patch = preparation.indexOf('node selfPlugin/enterprise-auth/scripts/patch-dsh-im.mjs')
+  const expose = preparation.indexOf('export DSH_IM_SOURCE=/app/selfPlugin/web-portal/im-runtime/node_modules/@xmanrui/dsh-im')
   const tests = preparation.indexOf('for plugin in enterprise-auth enterprise-tools web-portal')
   assert(clean > workspaceInstall, 'copied build artifacts must be cleaned after dependencies are installed')
   assert(build > clean, 'Harness must build from the cleaned disposable source copy')
   assert(install >= 0, 'reviewed IM package must be installed in the disposable profile')
   assert(patch > install, 'IM patch must run after package installation')
+  assert(expose > patch, 'plugin tests must resolve the patched IM package from the payload')
+  assert(tests > expose, 'patched IM package path must be exported before plugin tests')
   assert(tests > patch, 'plugin tests must run against the patched IM package')
+})
+
+test('image build names separate runtime and gateway images while compiling one payload', async () => {
+  const build = await readFile(new URL('../deploy/build-images.sh', import.meta.url), 'utf8')
+  assert.match(build, /PORTAL_RUNTIME_IMAGE/)
+  assert.match(build, /PORTAL_GATEWAY_IMAGE/)
+  assert.match(build, /docker tag "\$runtime_image" "\$gateway_image"/)
 })
 
 test('workspace links are relocated to /app, desktop links retained, build-only pnpm roots omitted', async t => {

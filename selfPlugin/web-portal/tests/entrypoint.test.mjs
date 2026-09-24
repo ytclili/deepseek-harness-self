@@ -13,7 +13,11 @@ const patch = [{ id: 'webserver', config: { host: '0.0.0.0', port: 3080 } }, { i
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'portal-entrypoint-'))
   const config = { home: join(root, 'home'), control: join(root, 'control'), appRoot: join(root, 'app') }
-  await Promise.all([mkdir(config.home), mkdir(config.control)])
+  await Promise.all([
+    mkdir(config.home),
+    mkdir(config.control),
+    mkdir(join(config.appRoot, 'selfPlugin/web-portal/im-runtime/node_modules/@xmanrui/dsh-im'), { recursive: true }),
+  ])
   await Promise.all([writeFile(join(config.control, 'model.env'), `PORTAL_MODEL_KEY=${capability}\n`), writeFile(join(config.control, 'settings.json'), JSON.stringify(settings)), writeFile(join(config.control, 'user.patch.json'), JSON.stringify(patch)), writeFile(join(config.home, '.credentials.yaml'), 'native-credentials-must-survive')])
   t.after(() => rm(root, { recursive: true, force: true }))
   return config
@@ -31,9 +35,10 @@ test('entrypoint creates only the approved profile and local links, preserving n
   await assert.rejects(readFile(join(config.home, 'settings.yaml')), { code: 'ENOENT' })
   const profile = join(config.home, 'profiles/web')
   const manifest = JSON.parse(await readFile(join(profile, 'package.json'), 'utf8'))
-  assert.deepEqual(manifest.dsh.profile.bundles, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
+  assert.deepEqual(manifest.dsh.profile.bundles, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@xmanrui/dsh-im'])
   assert.equal(manifest.dsh.profile.patchReload, 'startup')
   assert.equal(manifest.dependencies['dsh-web-portal'], `link:${config.appRoot}/selfPlugin/web-portal`)
+  assert.equal(manifest.dependencies['@xmanrui/dsh-im'], `link:${config.appRoot}/selfPlugin/web-portal/im-runtime/node_modules/@xmanrui/dsh-im`)
   assert.deepEqual(JSON.parse(await readFile(join(profile, 'cordis.patch.yml'), 'utf8')), [
     { id: 'llm-pi-ai', config: settings['llm-pi-ai'] },
     { id: 'agent-default-model', config: settings['agent-default-model'] },
@@ -41,6 +46,7 @@ test('entrypoint creates only the approved profile and local links, preserving n
   ])
   assert.equal(await readlink(join(profile, 'node_modules/dsh-web-portal')), `${config.appRoot}/selfPlugin/web-portal`)
   assert.equal(await readlink(join(profile, 'node_modules/dsh-enterprise-tools')), `${config.appRoot}/selfPlugin/enterprise-tools`)
+  assert.equal(await readlink(join(profile, 'node_modules/@xmanrui/dsh-im')), `${config.appRoot}/selfPlugin/web-portal/im-runtime/node_modules/@xmanrui/dsh-im`)
   assert.equal(await readFile(join(config.home, '.credentials.yaml'), 'utf8'), 'native-credentials-must-survive')
   assert.equal(await readFile(join(config.home, 'cordis.patch.yml'), 'utf8'), '[]\n')
 })
